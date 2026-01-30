@@ -20,6 +20,18 @@ export interface CreateOrderDto {
   discountCode?: string;
 }
 
+export interface Payment {
+  id: string;
+  status: string;
+  amount: number;
+  currency: string;
+  paymentMethod?: string;
+  paymentLink?: string;
+  mercadoPagoPreferenceId?: string;
+  mercadoPagoPaymentId?: string;
+  mercadoPagoStatus?: string;
+}
+
 export interface Order {
   id: string;
   leadId?: string;
@@ -31,6 +43,7 @@ export interface Order {
   total: number;
   currency: string;
   items: any[];
+  payments?: Payment[];
   shippingAddress?: any;
   shippingMethod?: string;
   createdAt: Date;
