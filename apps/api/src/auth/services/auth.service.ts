@@ -5,7 +5,7 @@ import {
   RegisterAdminDto,
   RegisterInfluencerDto,
   AuthResponse,
-} from "../../../../packages/shared/dist/index.js";
+} from "../../../../../packages/shared/dist/index.js";
 import {
   hashPassword,
   verifyPassword,

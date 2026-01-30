@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
-import { LoginDto, RegisterDto, RefreshTokenDto } from "../../../../packages/shared/dist/index.js";
+import { LoginDto, RegisterDto, RefreshTokenDto } from "../../../../../packages/shared/dist/index.js";
 import { AuthService } from "../services/auth.service.js";
 
 // Validation schemas
