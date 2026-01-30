@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   getInfluencerProfile,
   updatePaymentInfo,
@@ -36,11 +36,7 @@ export function PaymentInfoForm() {
     taxId?: string;
   }>({});
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getInfluencerProfile();
@@ -76,7 +72,11 @@ export function PaymentInfoForm() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   // Función para formatear CUIT/CUIL mientras se escribe
   const formatTaxId = (value: string): string => {

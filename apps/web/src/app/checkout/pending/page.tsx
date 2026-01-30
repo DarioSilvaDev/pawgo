@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getOrder, getPaymentStatus } from "@/lib/order";
 import Link from "next/link";
 
-export default function CheckoutPendingPage() {
+function CheckoutPendingContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const orderId = searchParams.get("orderId");
@@ -14,15 +14,7 @@ export default function CheckoutPendingPage() {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
 
-  useEffect(() => {
-    if (orderId) {
-      loadOrderData();
-    } else {
-      setLoading(false);
-    }
-  }, [orderId]);
-
-  const loadOrderData = async () => {
+  const loadOrderData = useCallback(async () => {
     try {
       const orderData = await getOrder(orderId!);
       setOrder(orderData);
@@ -44,7 +36,15 @@ export default function CheckoutPendingPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [orderId]);
+
+  useEffect(() => {
+    if (orderId) {
+      loadOrderData();
+    } else {
+      setLoading(false);
+    }
+  }, [orderId, loadOrderData]);
 
   const handleCheckStatus = async () => {
     if (!orderId) return;
@@ -210,5 +210,22 @@ export default function CheckoutPendingPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CheckoutPendingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-background-light-gray">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-turquoise mx-auto mb-4"></div>
+            <p className="text-text-dark-gray">Cargando...</p>
+          </div>
+        </div>
+      }
+    >
+      <CheckoutPendingContent />
+    </Suspense>
   );
 }

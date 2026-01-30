@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getDashboardStats, getSalesByPeriod, type DashboardStats, type SalesByPeriod } from "@/lib/analytics";
 import { useToast } from "@/components/ui/useToast";
 
@@ -15,15 +15,7 @@ export function AnalyticsDashboard() {
     endDate: new Date().toISOString().split("T")[0],
   });
 
-  useEffect(() => {
-    loadStats();
-  }, []);
-
-  useEffect(() => {
-    loadSalesData();
-  }, [period, dateRange]);
-
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getDashboardStats();
@@ -37,9 +29,9 @@ export function AnalyticsDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
 
-  const loadSalesData = async () => {
+  const loadSalesData = useCallback(async () => {
     try {
       const data = await getSalesByPeriod(period, dateRange.startDate, dateRange.endDate);
       setSalesData(data);
@@ -51,7 +43,15 @@ export function AnalyticsDashboard() {
         durationMs: 6000,
       });
     }
-  };
+  }, [period, dateRange, showToast]);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
+  useEffect(() => {
+    loadSalesData();
+  }, [loadSalesData]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-AR", {

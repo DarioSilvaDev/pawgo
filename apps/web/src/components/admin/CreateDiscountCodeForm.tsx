@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { discountCodeAPI, adminInfluencerAPI } from "@/lib/discount-code";
 import { CreateDiscountCodeDto } from "@pawgo/shared";
 import { useToast } from "@/components/ui/useToast";
@@ -38,11 +38,7 @@ export function CreateDiscountCodeForm({
   const [formData, setFormData] =
     useState<CreateDiscountCodeDto>(initialFormData);
 
-  useEffect(() => {
-    loadInfluencers();
-  }, []);
-
-  const loadInfluencers = async () => {
+  const loadInfluencers = useCallback(async () => {
     try {
       const data = await adminInfluencerAPI.getAll();
       setInfluencers(data.influencers || []);
@@ -53,7 +49,11 @@ export function CreateDiscountCodeForm({
           err instanceof Error ? err.message : "Error al cargar influencers",
       });
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    loadInfluencers();
+  }, [loadInfluencers]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

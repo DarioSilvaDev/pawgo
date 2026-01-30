@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { influencerAPI } from "@/lib/auth";
 import { useAuth } from "@/contexts/AuthContext";
@@ -51,11 +51,7 @@ export function InfluencerDashboard() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadDashboard();
-  }, []);
-
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     try {
       setLoading(true);
       const data = await influencerAPI.getDashboard();
@@ -69,7 +65,11 @@ export function InfluencerDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-AR", {

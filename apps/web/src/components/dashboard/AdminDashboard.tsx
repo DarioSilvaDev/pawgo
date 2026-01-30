@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { getDashboardStats, type DashboardStats } from "@/lib/analytics";
 import { useToast } from "@/components/ui/useToast";
@@ -10,11 +10,7 @@ export function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadStats();
-  }, []);
-
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getDashboardStats();
@@ -28,7 +24,11 @@ export function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-AR", {

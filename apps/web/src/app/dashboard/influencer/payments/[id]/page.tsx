@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
@@ -23,13 +23,7 @@ export default function MyInfluencerPaymentDetailPage() {
     }
   }, [user, loading, isInfluencer, router]);
 
-  useEffect(() => {
-    if (isInfluencer && paymentId) {
-      loadPayment();
-    }
-  }, [isInfluencer, paymentId]);
-
-  const loadPayment = async () => {
+  const loadPayment = useCallback(async () => {
     try {
       setLoadingPayment(true);
       setError("");
@@ -48,7 +42,13 @@ export default function MyInfluencerPaymentDetailPage() {
     } finally {
       setLoadingPayment(false);
     }
-  };
+  }, [paymentId, user?.entityId]);
+
+  useEffect(() => {
+    if (isInfluencer && paymentId) {
+      loadPayment();
+    }
+  }, [isInfluencer, paymentId, loadPayment]);
 
   if (loading) {
     return (

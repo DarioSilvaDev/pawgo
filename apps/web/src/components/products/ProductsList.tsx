@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { getProducts, deleteProduct, type Product } from "@/lib/product";
 import { useConfirmDialog } from "@/components/ui/useConfirmDialog";
 import { useToast } from "@/components/ui/useToast";
@@ -119,11 +120,13 @@ export function ProductsList() {
               className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
             >
               {product.images && product.images.length > 0 && (
-                <div className="h-48 bg-gray-200 flex items-center justify-center">
-                  <img
+                <div className="relative h-48 bg-gray-200">
+                  <Image
                     src={product.images[0]}
                     alt={product.name}
-                    className="h-full w-full object-cover"
+                    fill
+                    className="object-cover"
+                    unoptimized
                   />
                 </div>
               )}

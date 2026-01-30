@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { influencerAPI } from "@/lib/auth";
 import { useToast } from "@/components/ui/useToast";
@@ -41,7 +41,7 @@ export function ProfileView() {
     }
   }, [user, isInfluencer]);
 
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     try {
       setLoading(true);
       const data = await influencerAPI.getProfile();
@@ -55,7 +55,26 @@ export function ProfileView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    if (isInfluencer) {
+      loadProfile();
+    } else {
+      // For admin or other users, use auth data
+      if (user) {
+        setProfile({
+          id: user.id,
+          name: user.name || "Usuario",
+          email: user.email,
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        setLoading(false);
+      }
+    }
+  }, [user, isInfluencer, loadProfile]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("es-AR", {

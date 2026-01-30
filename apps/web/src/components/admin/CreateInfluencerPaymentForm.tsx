@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { CreateInfluencerPaymentDto } from "@pawgo/shared";
 import { createInfluencerPayment, getPendingCommissions } from "@/lib/influencer-payment";
 import { getAllInfluencers } from "@/lib/influencer";
@@ -39,20 +39,7 @@ export function CreateInfluencerPaymentForm({
   const [loading, setLoading] = useState(false);
   const [loadingCommissions, setLoadingCommissions] = useState(false);
 
-  useEffect(() => {
-    loadInfluencers();
-  }, []);
-
-  useEffect(() => {
-    if (selectedInfluencer) {
-      loadCommissions();
-    } else {
-      setCommissions([]);
-      setSelectedCommissions([]);
-    }
-  }, [selectedInfluencer]);
-
-  const loadInfluencers = async () => {
+  const loadInfluencers = useCallback(async () => {
     try {
       const data = await getAllInfluencers();
       if (Array.isArray(data)) {
@@ -76,9 +63,9 @@ export function CreateInfluencerPaymentForm({
         durationMs: 6000,
       });
     }
-  };
+  }, [showToast]);
 
-  const loadCommissions = async () => {
+  const loadCommissions = useCallback(async () => {
     try {
       setLoadingCommissions(true);
       const data = await getPendingCommissions(selectedInfluencer);
@@ -89,7 +76,20 @@ export function CreateInfluencerPaymentForm({
     } finally {
       setLoadingCommissions(false);
     }
-  };
+  }, [selectedInfluencer, showToast]);
+
+  useEffect(() => {
+    loadInfluencers();
+  }, [loadInfluencers]);
+
+  useEffect(() => {
+    if (selectedInfluencer) {
+      loadCommissions();
+    } else {
+      setCommissions([]);
+      setSelectedCommissions([]);
+    }
+  }, [selectedInfluencer, loadCommissions]);
 
   const handleCommissionToggle = (commissionId: string) => {
     setSelectedCommissions((prev) =>

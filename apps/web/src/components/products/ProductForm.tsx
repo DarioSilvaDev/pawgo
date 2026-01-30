@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   getProduct,
   createProduct,
@@ -298,15 +299,19 @@ export function ProductForm({ productId }: ProductFormProps) {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
                 {formData.images.map((url, index) => (
                   <div key={index} className="relative group">
-                    <img
-                      src={url}
-                      alt={`Imagen ${index + 1}`}
-                      className="w-full h-24 object-cover rounded-lg border border-gray-200"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src =
-                          "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23ddd' width='100' height='100'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='12' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EImagen%3C/text%3E%3C/svg%3E";
-                      }}
-                    />
+                    <div className="relative w-full h-24 rounded-lg border border-gray-200 overflow-hidden">
+                      <Image
+                        src={url}
+                        alt={`Imagen ${index + 1}`}
+                        fill
+                        className="object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23ddd' width='100' height='100'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='12' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EImagen%3C/text%3E%3C/svg%3E";
+                        }}
+                        unoptimized
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => removeImage(index)}

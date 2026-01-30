@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Image from "next/image";
 import { InfluencerPaymentWithDetails } from "@pawgo/shared";
 import { updateInfluencerPayment } from "@/lib/influencer-payment";
 import { uploadPaymentProof } from "@/lib/upload";
@@ -363,14 +364,18 @@ export function InfluencerPaymentDetails({
                 </a>
                 {(payment.invoiceUrl.startsWith("http://") ||
                   payment.invoiceUrl.startsWith("https://")) && (
-                  <img
-                    src={payment.invoiceUrl}
-                    alt="Factura"
-                    className="w-20 h-20 object-cover rounded border border-gray-200"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
+                  <div className="relative w-20 h-20 rounded border border-gray-200 overflow-hidden">
+                    <Image
+                      src={payment.invoiceUrl}
+                      alt="Factura"
+                      fill
+                      className="object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                      unoptimized
+                    />
+                  </div>
                 )}
               </div>
             ) : (
@@ -393,14 +398,18 @@ export function InfluencerPaymentDetails({
                 </a>
                 {(payment.paymentProofUrl.startsWith("http://") ||
                   payment.paymentProofUrl.startsWith("https://")) && (
-                  <img
-                    src={payment.paymentProofUrl}
-                    alt="Comprobante"
-                    className="w-20 h-20 object-cover rounded border border-gray-200"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
+                  <div className="relative w-20 h-20 rounded border border-gray-200 overflow-hidden">
+                    <Image
+                      src={payment.paymentProofUrl}
+                      alt="Comprobante"
+                      fill
+                      className="object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                      unoptimized
+                    />
+                  </div>
                 )}
               </div>
             ) : payment.status === "approved" || payment.status === "paid" ? (
@@ -450,15 +459,19 @@ export function InfluencerPaymentDetails({
                       </a>
                     ) : (
                       <div className="flex items-center space-x-2 flex-1">
-                        <img
-                          src={link}
-                          alt={`Contenido ${index + 1}`}
-                          className="w-16 h-16 object-cover rounded border border-gray-200"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display =
-                              "none";
-                          }}
-                        />
+                        <div className="relative w-16 h-16 rounded border border-gray-200 overflow-hidden">
+                          <Image
+                            src={link}
+                            alt={`Contenido ${index + 1}`}
+                            fill
+                            className="object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display =
+                                "none";
+                            }}
+                            unoptimized
+                          />
+                        </div>
                         <a
                           href={link}
                           target="_blank"
