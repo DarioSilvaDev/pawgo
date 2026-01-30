@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { eventService } from '../services/event.service.js';
-import { CreateEventDto, EventType } from '@pawgo/shared';
+import { CreateEventDto, EventType } from '../../../../packages/shared/dist/index.js';
 import { z } from 'zod';
 
 const createEventSchema = z.object({

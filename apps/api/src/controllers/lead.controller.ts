@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { leadService } from '../services/lead.service.js';
-import { CreateLeadDto, DogSize } from '@pawgo/shared';
+import { CreateLeadDto, DogSize } from '../../../../packages/shared/dist/index.js';
 import { z } from 'zod';
 
 const createLeadSchema = z.object({

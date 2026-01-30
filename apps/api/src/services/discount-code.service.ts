@@ -3,7 +3,7 @@ import {
   CreateDiscountCodeDto,
   UpdateDiscountCodeDto,
   DiscountCodeWithInfluencer,
-} from "@pawgo/shared";
+} from "../../../../packages/shared/dist/index.js";
 import { prismaDecimal, prismaNumber } from "../utils/decimal.js";
 import { DateTime } from "luxon";
 

@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma } from "@prisma/client";
-import { CreateOrderDto, OrderItem } from "@pawgo/shared";
+import { CreateOrderDto, OrderItem } from "../../../../packages/shared/dist/index.js";
 import { DiscountCodeService } from "./discount-code.service.js";
 import { CommissionService } from "./commission.service.js";
 import { emailService } from "./email.service.js";
@@ -50,7 +50,7 @@ export class OrderService {
       // Get variant if specified
       let variant = null;
       if (item.variantId) {
-        variant = product.variants.find((v) => v.id === item.variantId);
+        variant = product.variants.find((v: (typeof product.variants)[0]) => v.id === item.variantId);
         if (!variant) {
           throw new Error(`Variante ${item.variantId} no encontrada`);
         }
@@ -65,7 +65,7 @@ export class OrderService {
       } else {
         // If no variant specified, use first active variant or base price
         if (product.variants.length > 0) {
-          variant = product.variants.find((v) => v.isActive);
+          variant = product.variants.find((v: (typeof product.variants)[0]) => v.isActive);
           if (!variant) {
             throw new Error(
               `No hay variantes disponibles para ${product.name}`
@@ -210,7 +210,7 @@ export class OrderService {
 
     // Apply discount to each item
     const discountValue = prismaDecimal(discountCode.discountValue);
-    const updatedItemDiscounts = items.map((item) => {
+    const updatedItemDiscounts = items.map((item: (typeof items)[0]) => {
       const itemSubtotal = prismaDecimal(item.totalPrice);
       let itemDiscount = prismaDecimal(0);
 
@@ -234,7 +234,7 @@ export class OrderService {
 
     // Calculate total discount
     const totalDiscount = updatedItemDiscounts.reduce(
-      (sum, item) => sum.add(prismaDecimal(item.discount)),
+      (sum: ReturnType<typeof prismaDecimal>, item: (typeof updatedItemDiscounts)[0]) => sum.add(prismaDecimal(item.discount)),
       prismaDecimal(0)
     );
 
@@ -244,7 +244,7 @@ export class OrderService {
       .add(prismaDecimal(order.shippingCost));
 
     // Persist item-level discount breakdown in OrderItem.metadata (itemsSnapshot remains immutable)
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">) => {
       for (const item of updatedItemDiscounts) {
         await tx.orderItem.update({
           where: { id: item.id },

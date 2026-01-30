@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { StorageService } from "../services/storage.service.js";
 import { InfluencerPaymentService } from "../services/influencer-payment.service.js";
 import { PrismaClient } from "@prisma/client";
-import { JwtPayload } from "@pawgo/shared";
+import { JwtPayload } from "../../../../packages/shared/dist/index.js";
 
 const prisma = new PrismaClient();
 

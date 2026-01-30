@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { TokenService } from "../services/token.service.js";
-import { JwtPayload } from "@pawgo/shared";
+import { JwtPayload } from "../../../../packages/shared/dist/index.js";
 
 // Extend FastifyRequest interface using a different approach
 declare module "fastify" {

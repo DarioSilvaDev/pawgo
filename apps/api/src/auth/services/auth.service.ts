@@ -5,7 +5,7 @@ import {
   RegisterAdminDto,
   RegisterInfluencerDto,
   AuthResponse,
-} from "@pawgo/shared";
+} from "../../../../packages/shared/dist/index.js";
 import {
   hashPassword,
   verifyPassword,

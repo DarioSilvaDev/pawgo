@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import { CreateLeadDto, Lead, DogSize } from '@pawgo/shared';
+import { CreateLeadDto, Lead, DogSize } from '../../../../packages/shared/dist/index.js';
 
 const prisma = new PrismaClient();
 

@@ -3,7 +3,7 @@ import { createDiscountCodeController } from "../controllers/discount-code.contr
 import { DiscountCodeService } from "../services/discount-code.service.js";
 import { createAuthMiddleware, requireRole } from "../auth/middleware/auth.middleware.js";
 import { TokenService } from "../auth/services/token.service.js";
-import { UserRole } from "@pawgo/shared";
+import { UserRole } from "../../../../packages/shared/dist/index.js";
 
 export async function discountCodeRoutes(
   fastify: FastifyInstance,

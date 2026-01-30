@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
-import { CreateDiscountCodeDto, UpdateDiscountCodeDto } from "@pawgo/shared";
+import { CreateDiscountCodeDto, UpdateDiscountCodeDto } from "../../../../packages/shared/dist/index.js";
 import { DiscountCodeService } from "../services/discount-code.service.js";
 
 // Validation schemas

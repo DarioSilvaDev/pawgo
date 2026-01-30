@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { influencerService } from "../services/influencer.service.js";
 import { CommissionService } from "../services/commission.service.js";
-import { JwtPayload } from "@pawgo/shared";
+import { JwtPayload } from "../../../../packages/shared/dist/index.js";
 import { CommissionStatus } from "@prisma/client";
 
 const commissionService = new CommissionService();
