@@ -1,0 +1,186 @@
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import jwt from "@fastify/jwt";
+import path from "path";
+import { leadRoutes } from "./routes/lead.routes.js";
+import { eventRoutes } from "./routes/event.routes.js";
+import { authRoutes } from "./auth/routes/auth.routes.js";
+import { influencerRoutes } from "./routes/influencer.routes.js";
+import { discountCodeRoutes } from "./routes/discount-code.routes.js";
+import { orderRoutes } from "./routes/order.routes.js";
+import { webhookRoutes } from "./routes/webhook.routes.js";
+import { influencerPaymentRoutes } from "./routes/influencer-payment.routes.js";
+import { uploadRoutes } from "./routes/upload.routes.js";
+import { analyticsRoutes } from "./routes/analytics.routes.js";
+import { productRoutes } from "./routes/product.routes.js";
+import { TokenService } from "./auth/services/token.service.js";
+import { AuthService } from "./auth/services/auth.service.js";
+import { DiscountCodeService } from "./services/discount-code.service.js";
+import { OrderService } from "./services/order.service.js";
+import { CommissionService } from "./services/commission.service.js";
+import { MercadoPagoService } from "./services/mercadopago.service.js";
+import { InfluencerPaymentService } from "./services/influencer-payment.service.js";
+import { StorageService } from "./services/storage.service.js";
+import { AnalyticsService } from "./services/analytics.service.js";
+import multipart from "@fastify/multipart";
+import staticFiles from "@fastify/static";
+
+const fastify = Fastify({
+  logger: {
+    level: process.env.NODE_ENV === "production" ? "info" : "debug",
+  },
+});
+
+// Plugins
+// Configure helmet to work with CORS
+await fastify.register(helmet, {
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false,
+});
+await fastify.register(cors, {
+  origin:
+    process.env.NODE_ENV === "production"
+      ? process.env.FRONTEND_URL
+        ? [process.env.FRONTEND_URL]
+        : false
+      : [
+          "http://localhost:3000",
+          "http://127.0.0.1:3000",
+          "http://localhost:3001",
+          "http://127.0.0.1:3001",
+        ],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+});
+
+// JWT Plugin
+await fastify.register(jwt, {
+  secret: process.env.JWT_SECRET || "change-this-secret-in-production",
+  sign: {
+    expiresIn: "120m",
+  },
+});
+
+// Multipart Plugin (for file uploads)
+await fastify.register(multipart, {
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
+});
+
+// Initialize services
+const tokenService = new TokenService(fastify);
+const authService = new AuthService(tokenService);
+const discountCodeService = new DiscountCodeService();
+const commissionService = new CommissionService();
+const orderService = new OrderService(discountCodeService, commissionService);
+const mercadoPagoService = new MercadoPagoService();
+const influencerPaymentService = new InfluencerPaymentService();
+const storageService = new StorageService();
+const analyticsService = new AnalyticsService();
+
+// Initialize storage directories
+await storageService.initialize();
+
+// Health check
+fastify.get("/health", async () => {
+  return { status: "ok", timestamp: new Date().toISOString() };
+});
+
+// Routes
+await fastify.register(leadRoutes, {
+  prefix: "/api",
+  tokenService,
+});
+await fastify.register(eventRoutes, { prefix: "/api" });
+await fastify.register(authRoutes, {
+  prefix: "/api",
+  authService,
+  tokenService,
+});
+await fastify.register(influencerRoutes, {
+  prefix: "/api",
+  tokenService,
+});
+await fastify.register(discountCodeRoutes, {
+  prefix: "/api",
+  discountCodeService,
+  tokenService,
+});
+await fastify.register(orderRoutes, {
+  prefix: "/api",
+  orderService,
+  mercadoPagoService,
+  tokenService,
+});
+await fastify.register(webhookRoutes, {
+  prefix: "/api",
+  mercadoPagoService,
+  orderService,
+});
+await fastify.register(influencerPaymentRoutes, {
+  prefix: "/api",
+  influencerPaymentService,
+  tokenService,
+});
+await fastify.register(uploadRoutes, {
+  prefix: "/api",
+  storageService,
+  influencerPaymentService,
+  tokenService,
+});
+
+await fastify.register(analyticsRoutes, {
+  prefix: "/api",
+  analyticsService,
+  tokenService,
+});
+await fastify.register(productRoutes, {
+  prefix: "/api",
+  tokenService,
+});
+
+// Serve uploaded files
+await fastify.register(staticFiles, {
+  root: path.join(process.cwd(), "uploads"),
+  prefix: "/uploads/",
+});
+
+// Error handler
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+fastify.setErrorHandler((error: any, request: any, reply: any) => {
+  fastify.log.error(error);
+
+  reply.status(error.statusCode || 500).send({
+    error: {
+      message: error.message || "Internal server error",
+      statusCode: error.statusCode || 500,
+    },
+  });
+});
+
+const start = async () => {
+  try {
+    const port = Number(process.env.PORT) || 3001;
+    const host = process.env.HOST || "0.0.0.0";
+
+    await fastify.listen({ port, host });
+    console.log(`🚀 Server running on http://${host}:${port}`);
+  } catch (err) {
+    fastify.log.error(err);
+    process.exit(1);
+  }
+};
+
+// Graceful shutdown
+const shutdown = async () => {
+  await fastify.close();
+  process.exit(0);
+};
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
+
+start();

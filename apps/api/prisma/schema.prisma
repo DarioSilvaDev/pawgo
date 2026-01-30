@@ -1,0 +1,508 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums (persisted as strings in Postgres, mapped to existing lowercase values)
+enum AuthRole {
+  admin      @map("admin")
+  influencer @map("influencer")
+  user       @map("user")
+}
+
+enum OrderStatus {
+  pending   @map("pending")
+  paid      @map("paid")
+  shipped   @map("shipped")
+  delivered @map("delivered")
+  cancelled @map("cancelled")
+}
+
+enum PaymentStatus {
+  pending   @map("pending")
+  approved  @map("approved")
+  rejected  @map("rejected")
+  refunded  @map("refunded")
+  cancelled @map("cancelled")
+}
+
+enum CommissionStatus {
+  pending   @map("pending")
+  paid      @map("paid")
+  cancelled @map("cancelled")
+}
+
+enum InfluencerPaymentStatus {
+  pending          @map("pending")
+  invoice_uploaded @map("invoice_uploaded")
+  invoice_rejected @map("invoice_rejected")
+  approved         @map("approved")
+  paid             @map("paid")
+  cancelled        @map("cancelled")
+}
+
+enum DiscountType {
+  percentage @map("percentage")
+  fixed      @map("fixed")
+}
+
+enum InfluencerInvoiceStatus {
+  pending  @map("pending")
+  uploaded @map("uploaded")
+  approved @map("approved")
+  rejected @map("rejected")
+}
+
+model Lead {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  dogSize   String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  orders Order[]
+
+  @@index([createdAt])
+  @@map("leads")
+}
+
+// Autenticación y seguridad
+model Auth {
+  id           String @id @default(cuid())
+  email        String @unique // Email único - fuente de verdad
+  passwordHash String // bcrypt hash
+  role         AuthRole @default(user)
+
+  // OTP y 2FA
+  otpSecret      String? // Para TOTP (Time-based OTP)
+  otpEnabled     Boolean  @default(false)
+  otpBackupCodes OtpBackupCode[]
+
+  // Seguridad
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime? @db.Timestamptz(3) // Bloqueo temporal por intentos fallidos
+  lastLoginAt         DateTime? @db.Timestamptz(3)
+  lastLoginIp         String?
+
+  // Tokens
+  refreshTokens RefreshToken[]
+
+  // Relaciones con usuarios (1:1)
+  admin      Admin?      @relation("AdminAuth")
+  influencer Influencer? @relation("InfluencerAuth")
+
+  // Auditoría de facturas de pagos a influencers
+  uploadedInfluencerInvoices      InfluencerInvoice[] @relation("InfluencerInvoiceUploadedBy")
+  statusChangedInfluencerInvoices InfluencerInvoice[] @relation("InfluencerInvoiceStatusChangedBy")
+
+  // Email verification
+  emailVerified            Boolean   @default(false)
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime? @db.Timestamptz(3)
+
+  // Password reset
+  passwordResetToken   String?
+  passwordResetExpires DateTime? @db.Timestamptz(3)
+
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([email])
+  @@index([emailVerificationToken])
+  @@index([passwordResetToken])
+  @@index([createdAt])
+  @@map("auth")
+}
+
+// OTP Backup Codes (normalizado, con hash y tracking de uso)
+model OtpBackupCode {
+  id        String   @id @default(cuid())
+  authId    String
+  codeHash  String
+  usedAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  auth Auth @relation(fields: [authId], references: [id], onDelete: Cascade)
+
+  @@unique([authId, codeHash])
+  @@index([authId])
+  @@index([usedAt])
+  @@index([createdAt])
+  @@map("otp_backup_codes")
+}
+
+model RefreshToken {
+  id         String    @id @default(cuid())
+  authId     String
+  token      String    @unique
+  expiresAt  DateTime @db.Timestamptz(3)
+  deviceInfo String? // Info del dispositivo/navegador
+  ipAddress  String?
+  revoked    Boolean   @default(false)
+  revokedAt  DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+
+  auth Auth @relation(fields: [authId], references: [id], onDelete: Cascade)
+
+  @@index([authId])
+  @@index([token])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("refresh_tokens")
+}
+
+// Admin (opcional, si necesitas panel de administración)
+model Admin {
+  id        String   @id @default(cuid())
+  name      String
+  authId    String   @unique
+  auth      Auth     @relation("AdminAuth", fields: [authId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@map("admins")
+}
+
+model Event {
+  id        String   @id @default(cuid())
+  type      String
+  metadata  Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@map("events")
+}
+
+// Contador de eventos por tipo y fecha - optimizado para eventos simples (clicks)
+// Los eventos importantes (como intenciones de compra) se registran en leads
+model EventCounter {
+  id        String   @id @default(cuid())
+  type      String // Tipo de evento (EventType)
+  date      DateTime @default(now()) @db.Date // Fecha del evento (solo fecha, sin hora)
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([type, date]) // Un contador único por tipo y fecha
+  @@index([type])
+  @@index([date])
+  @@index([type, date])
+  @@index([createdAt])
+  @@map("event_counters")
+}
+
+// E-commerce
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  basePrice   Decimal  @db.Decimal(10, 2) // Precio base del producto
+  launchPrice Decimal? @db.Decimal(10, 2) // Precio de lanzamiento (opcional, debe ser <= basePrice)
+  currency    String   @default("ARS")
+  images      String[]
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  variants ProductVariant[]
+  orderItems OrderItem[]
+
+  @@index([createdAt])
+  @@map("products")
+}
+
+// Variantes de producto (tamaños, colores, etc.)
+model ProductVariant {
+  id          String   @id @default(cuid())
+  productId   String
+  name        String   // Ej: "Pequeño", "Mediano", "Grande"
+  size        String?  // Tamaño específico (opcional, para compatibilidad con dogSize)
+  price       Decimal? @db.Decimal(10, 2) // Precio especial (ej: lanzamiento). Si es null, usa basePrice del producto
+  stock       Int?     // Stock específico de esta variante
+  sku         String?  // SKU único
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@index([productId])
+  @@index([sku])
+  @@index([createdAt])
+  @@map("product_variants")
+}
+
+// Influencers y códigos de descuento
+model Influencer {
+  id          String  @id @default(cuid())
+  name        String
+  phone       String?
+  socialMedia Json? // Instagram, TikTok, etc.
+  authId      String  @unique // Obligatorio - todos los influencers tienen cuenta
+  isActive    Boolean @default(true)
+
+  // Datos de pago
+  paymentMethod    String? // "transfer", "mercadopago"
+  accountNumber    String? // Número de cuenta bancaria
+  cvu              String? // CVU/CBU para transferencias
+  bankName         String? // Nombre del banco
+  mercadopagoEmail String? // Email de MercadoPago para recibir pagos
+  taxId            String? // CUIT/CUIL para facturación
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  auth               Auth                @relation("InfluencerAuth", fields: [authId], references: [id], onDelete: Cascade)
+  discountCodes      DiscountCode[]
+  commissions        Commission[]
+  influencerPayments InfluencerPayment[]
+  discountCodeSettlements DiscountCodeSettlement[]
+
+  @@index([createdAt])
+  @@map("influencers")
+}
+
+model DiscountCode {
+  id            String    @id @default(cuid())
+  code          String    @unique // Ej: "INFLUENCER10"
+  influencerId  String
+  discountType  DiscountType
+  discountValue Decimal @db.Decimal(10, 2) // 10.00 para 10% o monto fijo (según discountType)
+  minPurchase   Decimal? @db.Decimal(10, 2) // Compra mínima para usar el código
+  maxUses       Int? // Límite de usos (null = ilimitado)
+  usedCount     Int       @default(0)
+  isActive      Boolean   @default(true)
+  validFrom     DateTime  @default(now()) @db.Timestamptz(3)
+  validUntil    DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+
+  influencer  Influencer   @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  orders      Order[]
+  commissions Commission[]
+  settlements DiscountCodeSettlement[]
+
+  @@index([code])
+  @@index([influencerId])
+  @@index([createdAt])
+  @@map("discount_codes")
+}
+
+// Cierre (settlement) de un código expirado, para idempotencia/auditoría
+model DiscountCodeSettlement {
+  id                 String   @id @default(cuid())
+  discountCodeId     String   @unique
+  influencerId       String
+  totalAmount        Decimal  @db.Decimal(10, 2)
+  currency           String   @default("ARS")
+  commissionsCount   Int      @default(0)
+  influencerPaymentId String? @unique
+  processedAt        DateTime @default(now()) @db.Timestamptz(3)
+
+  discountCode      DiscountCode       @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
+  influencer        Influencer         @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  influencerPayment InfluencerPayment? @relation(fields: [influencerPaymentId], references: [id], onDelete: SetNull)
+
+  @@index([influencerId])
+  @@index([processedAt])
+  @@map("discount_code_settlements")
+}
+
+// E-commerce - Ordenes
+model Order {
+  id              String   @id @default(cuid())
+  leadId          String?
+  discountCodeId  String? // Código de descuento usado
+  status          OrderStatus @default(pending)
+  subtotal        Decimal @db.Decimal(10, 2) // Antes de descuento
+  discount        Decimal @default(0) @db.Decimal(10, 2) // Descuento aplicado
+  shippingCost    Decimal @default(0) @db.Decimal(10, 2) // Costo de envío
+  total           Decimal @db.Decimal(10, 2) // Subtotal - discount + shippingCost
+  currency        String   @default("ARS")
+  shippingAddress Json? // Dirección de envío
+  shippingMethod  String? // Método de envío
+  itemsSnapshot   Json     @map("items") // Snapshot histórico (fuente de verdad histórica)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+
+  lead         Lead?         @relation(fields: [leadId], references: [id])
+  discountCode DiscountCode? @relation(fields: [discountCodeId], references: [id])
+  payments     Payment[]
+  items        OrderItem[]
+  commission   Commission?
+
+  @@index([discountCodeId])
+  @@index([leadId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+// E-commerce - Items normalizados de la orden (sin romper snapshot histórico)
+model OrderItem {
+  id             String   @id @default(cuid())
+  orderId        String
+  productId      String?
+  productVariantId String?
+  name           String
+  quantity       Int
+  unitPrice      Decimal  @db.Decimal(10, 2)
+  totalPrice     Decimal  @db.Decimal(10, 2)
+  currency       String   @default("ARS")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productVariant ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([productVariantId])
+  @@index([createdAt])
+  @@map("order_items")
+}
+
+// E-commerce - Pagos con MercadoPago
+model Payment {
+  id                      String   @id @default(cuid())
+  orderId                 String
+  status                  PaymentStatus @default(pending)
+  amount                  Decimal  @db.Decimal(10, 2)
+  currency                String   @default("ARS")
+  paymentMethod           String   @default("mercadopago") // "mercadopago", "transfer", "cash"
+  mercadoPagoPreferenceId String? // ID de preferencia en MercadoPago
+  mercadoPagoPaymentId    String? // ID de pago en MercadoPago
+  paymentLink             String? // Link de pago de MercadoPago
+  metadata                Json? // Datos adicionales de MercadoPago
+  createdAt               DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime @updatedAt @db.Timestamptz(3)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([mercadoPagoPaymentId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("payments")
+}
+
+// Comisiones de influencers
+model Commission {
+  id                  String    @id @default(cuid())
+  influencerId        String
+  orderId             String    @unique
+  discountCodeId      String
+  orderTotal          Decimal @db.Decimal(10, 2) // Total de la orden
+  discountAmount      Decimal @db.Decimal(10, 2) // Descuento aplicado al cliente
+  commissionRate      Decimal @db.Decimal(10, 2) // % de comisión (ej: 10.00)
+  commissionAmount    Decimal @db.Decimal(10, 2) // Monto de comisión calculado
+  status              CommissionStatus @default(pending)
+  influencerPaymentId String? // ID del pago que incluye esta comisión
+  paidAt              DateTime? @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
+
+  influencer        Influencer         @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  order             Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  discountCode      DiscountCode       @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
+  influencerPayment InfluencerPayment? @relation(fields: [influencerPaymentId], references: [id], onDelete: SetNull)
+
+  @@index([influencerId])
+  @@index([status])
+  @@index([orderId])
+  @@index([influencerPaymentId])
+  @@index([createdAt])
+  @@map("commissions")
+}
+
+// Pagos a influencers
+model InfluencerPayment {
+  id            String   @id @default(cuid())
+  influencerId  String
+  totalAmount   Decimal  @db.Decimal(10, 2)
+  currency      String   @default("ARS")
+  paymentMethod String // "transfer", "mercadopago"
+  status        InfluencerPaymentStatus @default(pending)
+
+  // Datos bancarios/MercadoPago (pueden venir del influencer o ser específicos del pago)
+  accountNumber    String?
+  cvu              String?
+  bankName         String?
+  mercadopagoEmail String?
+
+  // Documentos (URLs en storage)
+  invoiceUrl      String? // URL de factura subida
+  invoiceRejectionReason String? // Motivo/observación del rechazo de la factura
+  paymentProofUrl String? // URL de comprobante de pago
+  contentLinks    Json? // Array de links/capturas del contenido publicado
+
+  // Tracking de estados
+  requestedAt       DateTime  @default(now()) @db.Timestamptz(3)
+  invoiceUploadedAt DateTime? @db.Timestamptz(3)
+  invoiceRejectedAt DateTime? @db.Timestamptz(3)
+  approvedAt        DateTime? @db.Timestamptz(3)
+  paidAt            DateTime? @db.Timestamptz(3)
+  cancelledAt       DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  influencer  Influencer   @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  commissions Commission[]
+  invoices    InfluencerInvoice[]
+  discountCodeSettlements DiscountCodeSettlement[]
+
+  @@index([influencerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("influencer_payments")
+}
+
+// Facturas de pagos a influencers (histórico y auditoría)
+model InfluencerInvoice {
+  id                 String   @id @default(cuid())
+  influencerPaymentId String
+
+  // Estado de la factura (ciclo de vida)
+  status InfluencerInvoiceStatus @default(uploaded)
+
+  // Documento
+  url         String
+  observation String? // observación/motivo (ej. rechazo)
+
+  // Vigencia: true = factura vigente/actual; false = reemplazada/rechazada
+  enabled Boolean @default(true)
+
+  // Auditoría
+  uploadedByAuthId      String
+  statusChangedByAuthId String?
+  statusChangedAt       DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  influencerPayment InfluencerPayment @relation(fields: [influencerPaymentId], references: [id], onDelete: Cascade)
+  uploadedBy       Auth       @relation("InfluencerInvoiceUploadedBy", fields: [uploadedByAuthId], references: [id], onDelete: Restrict)
+  statusChangedBy  Auth?      @relation("InfluencerInvoiceStatusChangedBy", fields: [statusChangedByAuthId], references: [id], onDelete: SetNull)
+
+  @@index([influencerPaymentId])
+  @@index([influencerPaymentId, enabled])
+  @@index([status])
+  @@index([uploadedByAuthId])
+  @@index([statusChangedByAuthId])
+  @@index([createdAt])
+  @@map("influencer_invoices")
+}
