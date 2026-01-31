@@ -67,6 +67,7 @@ export function createUploadController(
         // Upload file
         const result = await storageService.uploadInvoice(
           buffer,
+          user.authId,
           data.filename,
           data.mimetype
         );
@@ -129,6 +130,7 @@ export function createUploadController(
         // Upload file
         const result = await storageService.uploadPaymentProof(
           buffer,
+          user.authId,
           data.filename,
           data.mimetype
         );
@@ -210,6 +212,7 @@ export function createUploadController(
         const result = await storageService.uploadContent(
           buffer,
           data.filename,
+          user.authId,
           data.mimetype
         );
 

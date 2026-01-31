@@ -22,19 +22,22 @@ const transporter = nodemailer.createTransport({
       : undefined,
 });
 
-// Verify transporter configuration
+// Verify transporter configuration (async, don't block startup)
 if (SMTP_USER && SMTP_PASS) {
-  transporter
-    .verify()
-    .then(() => {
-      console.log("✅ Email service configured and ready");
-    })
-    .catch((error) => {
-      console.warn("⚠️ Email service configuration error:", error.message);
-      console.warn(
-        "⚠️ Emails will not be sent until SMTP is properly configured"
-      );
-    });
+  // Verify asynchronously to avoid blocking server startup
+  setImmediate(() => {
+    transporter
+      .verify()
+      .then(() => {
+        console.log("✅ Email service configured and ready");
+      })
+      .catch((error) => {
+        console.warn("⚠️ Email service configuration error:", error.message);
+        console.warn(
+          "⚠️ Emails will not be sent until SMTP is properly configured"
+        );
+      });
+  });
 } else {
   console.warn("⚠️ SMTP credentials not configured. Emails will not be sent.");
 }

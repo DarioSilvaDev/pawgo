@@ -2,7 +2,6 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import jwt from "@fastify/jwt";
-import path from "path";
 import { leadRoutes } from "./routes/lead.routes.js";
 import { eventRoutes } from "./routes/event.routes.js";
 import { authRoutes } from "./auth/routes/auth.routes.js";
@@ -24,7 +23,6 @@ import { InfluencerPaymentService } from "./services/influencer-payment.service.
 import { StorageService } from "./services/storage.service.js";
 import { AnalyticsService } from "./services/analytics.service.js";
 import multipart from "@fastify/multipart";
-import staticFiles from "@fastify/static";
 
 const fastify = Fastify({
   logger: {
@@ -142,11 +140,8 @@ await fastify.register(productRoutes, {
   tokenService,
 });
 
-// Serve uploaded files
-await fastify.register(staticFiles, {
-  root: path.join(process.cwd(), "uploads"),
-  prefix: "/uploads/",
-});
+// Note: Files are now served from Backblaze B2, not from local filesystem
+// Static file serving is disabled as files are stored in cloud storage
 
 // Error handler
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
