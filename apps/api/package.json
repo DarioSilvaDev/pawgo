@@ -6,7 +6,7 @@
     "dev": "tsx watch src/server.ts",
     "worker:dev": "tsx watch src/worker.ts",
     "worker:start": "node dist/worker.js",
-    "build": "cd ../../packages/shared && pnpm run build && cd ../../apps/api && pnpm run prisma:generate && tsc",
+    "build": "cd ../../packages/shared && pnpm run build && cd ../../apps/api && pnpm run prisma:generate && pnpm run prisma:migrate && tsc",
     "start": "node dist/server.js",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist",

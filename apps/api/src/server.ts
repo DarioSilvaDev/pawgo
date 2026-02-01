@@ -88,6 +88,16 @@ fastify.get("/health", async () => {
   return { status: "ok", timestamp: new Date().toISOString() };
 });
 
+// Root endpoint
+fastify.get("/", async () => {
+  return {
+    status: "ok",
+    service: "PawGo API",
+    version: "1.0.0",
+    timestamp: new Date().toISOString()
+  };
+});
+
 // Routes
 await fastify.register(leadRoutes, {
   prefix: "/api",
