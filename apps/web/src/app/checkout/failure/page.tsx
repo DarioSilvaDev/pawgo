@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -8,6 +8,12 @@ function CheckoutFailureContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const orderId = searchParams.get("orderId");
+
+  useEffect(() => {
+    // Clear payment in progress flag when arriving at failure page
+    sessionStorage.removeItem("paymentInProgress");
+    sessionStorage.removeItem("paymentOrderId");
+  }, []);
 
   return (
     <div className="min-h-screen bg-background-light-gray py-8 md:py-12">

@@ -30,6 +30,17 @@ export default function CheckoutPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Reset processing state when component mounts (e.g., user navigates back)
+  useEffect(() => {
+    // Check if there's a payment process in sessionStorage
+    const paymentInProgress = sessionStorage.getItem("paymentInProgress");
+    
+    // If user navigated back and there's no active payment, reset processing state
+    if (!paymentInProgress) {
+      setIsProcessing(false);
+    }
+  }, []);
+
   // Fetch products
   useEffect(() => {
     const fetchProducts = async () => {
@@ -186,11 +197,16 @@ export default function CheckoutPage() {
       // 2. Create payment with MercadoPago
       const payment = await createPayment(order.id);
 
-      // 3. Redirect user to MercadoPago checkout
+      // 3. Mark payment as in progress in sessionStorage
+      sessionStorage.setItem("paymentInProgress", "true");
+      sessionStorage.setItem("paymentOrderId", order.id);
+
+      // 4. Redirect user to MercadoPago checkout
       window.location.href = payment.paymentLink;
       
       // Note: The user will be redirected back to /checkout/success, /checkout/failure, or /checkout/pending
       // after completing the payment on MercadoPago
+      // sessionStorage will be cleared in those pages
     } catch (err) {
       setError(
         err instanceof Error
@@ -198,6 +214,9 @@ export default function CheckoutPage() {
           : "Error al procesar el pedido. Por favor, intenta nuevamente."
       );
       setIsProcessing(false);
+      // Clear payment in progress flag on error
+      sessionStorage.removeItem("paymentInProgress");
+      sessionStorage.removeItem("paymentOrderId");
     }
   };
 

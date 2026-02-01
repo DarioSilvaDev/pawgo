@@ -14,6 +14,12 @@ function CheckoutPendingContent() {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
 
+  useEffect(() => {
+    // Clear payment in progress flag when arriving at pending page
+    sessionStorage.removeItem("paymentInProgress");
+    sessionStorage.removeItem("paymentOrderId");
+  }, []);
+
   const loadOrderData = useCallback(async () => {
     try {
       const orderData = await getOrder(orderId!);

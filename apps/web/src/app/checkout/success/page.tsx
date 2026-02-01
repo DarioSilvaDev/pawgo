@@ -14,6 +14,10 @@ function CheckoutSuccessContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Clear payment in progress flag when arriving at success page
+    sessionStorage.removeItem("paymentInProgress");
+    sessionStorage.removeItem("paymentOrderId");
+
     if (orderId) {
       getOrder(orderId)
         .then((orderData) => {
