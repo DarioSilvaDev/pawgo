@@ -42,7 +42,7 @@ const envsSchema = z
 
         HOST: z.string().default("0.0.0.0").describe("El host en el que se ejecutará la aplicación"),
         // Base de datos
-        DATABASE_URL: z.string().url().describe("La URL de la base de datos"),
+        DATABASE_URL: z.string().describe("La URL de la base de datos"),
 
         // URLs
         FRONTEND_URL: z.string().url().describe("La URL de la aplicación frontend"),
