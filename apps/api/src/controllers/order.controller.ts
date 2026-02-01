@@ -263,6 +263,80 @@ export function createOrderController(
     },
 
     /**
+     * Get all orders (admin only)
+     */
+    async getAll(request: FastifyRequest, reply: FastifyReply) {
+      try {
+        const user = request.authUser as { role?: string } | undefined;
+        if (!user || user.role !== "admin") {
+          reply.status(403).send({
+            error: "Solo los administradores pueden ver todas las órdenes",
+          });
+          return;
+        }
+
+        const query = request.query as {
+          page?: string;
+          limit?: string;
+          status?: string;
+          search?: string;
+        };
+
+        const result = await orderService.getAll({
+          page: query.page ? parseInt(query.page, 10) : undefined,
+          limit: query.limit ? parseInt(query.limit, 10) : undefined,
+          status: query.status,
+          search: query.search,
+        });
+
+        reply.send(result);
+      } catch (error) {
+        if (error instanceof Error) {
+          reply.status(400).send({
+            error: error.message,
+          });
+          return;
+        }
+        throw error;
+      }
+    },
+
+    /**
+     * Get order details with lead information (admin only)
+     */
+    async getOrderDetails(request: FastifyRequest, reply: FastifyReply) {
+      try {
+        const user = request.authUser as { role?: string } | undefined;
+        if (!user || user.role !== "admin") {
+          reply.status(403).send({
+            error: "Solo los administradores pueden ver los detalles de las órdenes",
+          });
+          return;
+        }
+
+        const { id } = request.params as { id: string };
+        const order = await orderService.getById(id);
+
+        if (!order) {
+          reply.status(404).send({
+            error: "Orden no encontrada",
+          });
+          return;
+        }
+
+        reply.send(order);
+      } catch (error) {
+        if (error instanceof Error) {
+          reply.status(400).send({
+            error: error.message,
+          });
+          return;
+        }
+        throw error;
+      }
+    },
+
+    /**
      * Simulate complete order and payment (for testing)
      * This creates the order, simulates payment approval, and generates commissions
      */

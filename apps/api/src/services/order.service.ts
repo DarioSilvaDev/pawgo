@@ -303,8 +303,131 @@ export class OrderService {
         },
         payments: true,
         commission: true,
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                images: true,
+              },
+            },
+            productVariant: {
+              select: {
+                id: true,
+                name: true,
+                size: true,
+              },
+            },
+          },
+        },
       },
     });
+  }
+
+  /**
+   * Get all orders with pagination and filters (for admin)
+   */
+  async getAll(options?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    search?: string;
+  }) {
+    const page = options?.page || 1;
+    const limit = options?.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.OrderWhereInput = {};
+
+    if (options?.status) {
+      where.status = options.status as any;
+    }
+
+    if (options?.search) {
+      where.OR = [
+        { id: { contains: options.search, mode: "insensitive" } },
+        { lead: { email: { contains: options.search, mode: "insensitive" } } },
+        { lead: { name: { contains: options.search, mode: "insensitive" } } },
+      ];
+    }
+
+    const [orders, total] = await Promise.all([
+      prisma.order.findMany({
+        where,
+        include: {
+          lead: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              dogSize: true,
+              createdAt: true,
+            },
+          },
+          discountCode: {
+            select: {
+              id: true,
+              code: true,
+              discountType: true,
+              discountValue: true,
+            },
+          },
+          payments: {
+            select: {
+              id: true,
+              status: true,
+              amount: true,
+              currency: true,
+              paymentMethod: true,
+              createdAt: true,
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+          },
+          items: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+              productVariant: {
+                select: {
+                  id: true,
+                  name: true,
+                  size: true,
+                },
+              },
+            },
+          },
+          _count: {
+            select: {
+              items: true,
+              payments: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.order.count({ where }),
+    ]);
+
+    return {
+      orders,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   /**

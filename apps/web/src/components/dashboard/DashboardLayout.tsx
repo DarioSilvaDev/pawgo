@@ -99,6 +99,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   >
                     Leads
                   </Link>
+                  <Link
+                    href="/dashboard/orders"
+                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-primary-turquoise hover:bg-gray-50 rounded-lg transition-colors"
+                  >
+                    Órdenes
+                  </Link>
                 </>
               )}
               {isInfluencer && (
@@ -279,6 +285,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     onClick={() => setShowMobileMenu(false)}
                   >
                     Leads
+                  </Link>
+                  <Link
+                    href="/dashboard/orders"
+                    className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-primary-turquoise hover:bg-gray-50 rounded-lg"
+                    onClick={() => setShowMobileMenu(false)}
+                  >
+                    Órdenes
                   </Link>
                 </>
               )}

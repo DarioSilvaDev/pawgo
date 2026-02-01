@@ -32,6 +32,14 @@ export interface Payment {
   mercadoPagoStatus?: string;
 }
 
+export interface Lead {
+  id: string;
+  email: string;
+  name?: string;
+  dogSize?: string;
+  createdAt: Date;
+}
+
 export interface Order {
   id: string;
   leadId?: string;
@@ -48,6 +56,23 @@ export interface Order {
   shippingMethod?: string;
   createdAt: Date;
   updatedAt: Date;
+  lead?: Lead;
+  discountCode?: {
+    id: string;
+    code: string;
+    discountType: string;
+    discountValue: number;
+  };
+}
+
+export interface OrdersResponse {
+  orders: Order[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 /**
@@ -144,6 +169,52 @@ export async function createPayment(orderId: string): Promise<{
  */
 export async function getPaymentStatus(paymentId: string): Promise<any> {
   const response = await fetchAPI(`/payments/${paymentId}/status`);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: "Error desconocido",
+    }));
+    throw new Error(error.error || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Get all orders (admin only)
+ */
+export async function getAllOrders(options?: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  search?: string;
+}): Promise<OrdersResponse> {
+  const params = new URLSearchParams();
+  if (options?.page) params.append("page", options.page.toString());
+  if (options?.limit) params.append("limit", options.limit.toString());
+  if (options?.status) params.append("status", options.status);
+  if (options?.search) params.append("search", options.search);
+
+  const queryString = params.toString();
+  const url = `/orders${queryString ? `?${queryString}` : ""}`;
+
+  const response = await fetchAPI(url);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: "Error desconocido",
+    }));
+    throw new Error(error.error || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Get order details with lead information (admin only)
+ */
+export async function getOrderDetails(id: string): Promise<Order> {
+  const response = await fetchAPI(`/orders/${id}/details`);
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({

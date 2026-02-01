@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 import { createOrderController } from "../controllers/order.controller.js";
 import { OrderService } from "../services/order.service.js";
 import { MercadoPagoService } from "../services/mercadopago.service.js";
-// import { createAuthMiddleware } from "../auth/middleware/auth.middleware.js";
+import { createAuthMiddleware } from "../auth/middleware/auth.middleware.js";
 import { TokenService } from "../auth/services/token.service.js";
 
 export async function orderRoutes(
@@ -13,9 +13,9 @@ export async function orderRoutes(
     tokenService: TokenService;
   }
 ) {
-  const { orderService, mercadoPagoService } = options;
+  const { orderService, mercadoPagoService, tokenService } = options;
   const orderController = createOrderController(orderService, mercadoPagoService);
-  // const authenticate = createAuthMiddleware(tokenService);
+  const authenticate = createAuthMiddleware(tokenService);
 
   // Public routes (for checkout)
   fastify.post("/orders", orderController.create);
@@ -23,6 +23,23 @@ export async function orderRoutes(
   fastify.post("/orders/:id/apply-discount", orderController.applyDiscountCode);
   fastify.post("/orders/:id/payment", orderController.createPayment);
   fastify.get("/payments/:id/status", orderController.getPaymentStatus);
+  
+  // Admin routes (protected)
+  fastify.get(
+    "/orders",
+    {
+      preHandler: authenticate,
+    },
+    orderController.getAll
+  );
+
+  fastify.get(
+    "/orders/:id/details",
+    {
+      preHandler: authenticate,
+    },
+    orderController.getOrderDetails
+  );
   
   // Testing route - simulate complete order with payment
   fastify.post("/orders/simulate", orderController.simulateCompleteOrder);
