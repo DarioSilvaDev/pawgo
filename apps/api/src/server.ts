@@ -1,7 +1,10 @@
+import "./config/envs.js";
+
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import jwt from "@fastify/jwt";
+import { envs } from "./config/envs.js";
 import { leadRoutes } from "./routes/lead.routes.js";
 import { eventRoutes } from "./routes/event.routes.js";
 import { authRoutes } from "./auth/routes/auth.routes.js";
@@ -26,7 +29,7 @@ import multipart from "@fastify/multipart";
 
 const fastify = Fastify({
   logger: {
-    level: process.env.NODE_ENV === "production" ? "info" : "debug",
+    level: envs.NODE_ENV === "production" ? "info" : "debug",
   },
 });
 
@@ -38,16 +41,14 @@ await fastify.register(helmet, {
 });
 await fastify.register(cors, {
   origin:
-    process.env.NODE_ENV === "production"
-      ? process.env.FRONTEND_URL
-        ? [process.env.FRONTEND_URL]
-        : false
+    envs.NODE_ENV === "production"
+      ? [envs.FRONTEND_URL]
       : [
-          "http://localhost:3000",
-          "http://127.0.0.1:3000",
-          "http://localhost:3001",
-          "http://127.0.0.1:3001",
-        ],
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+      ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
@@ -55,7 +56,7 @@ await fastify.register(cors, {
 
 // JWT Plugin
 await fastify.register(jwt, {
-  secret: process.env.JWT_SECRET || "change-this-secret-in-production",
+  secret: envs.JWT_SECRET,
   sign: {
     expiresIn: "120m",
   },
@@ -158,11 +159,11 @@ fastify.setErrorHandler((error: any, request: any, reply: any) => {
 
 const start = async () => {
   try {
-    const port = Number(process.env.PORT) || 3001;
-    const host = process.env.HOST || "0.0.0.0";
+    const port = envs.PORT;
+    const host = envs.HOST;
 
     await fastify.listen({ port, host });
-    console.log(`🚀 Server running on ${host}`);
+    console.info(`🚀 Server running`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

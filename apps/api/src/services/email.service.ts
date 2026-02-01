@@ -1,12 +1,14 @@
 import nodemailer from "nodemailer";
+import { envs } from "../config/envs";
 
 // Email configuration from environment variables
-const SMTP_HOST = process.env.SMTP_HOST || "smtp.gmail.com";
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
-const SMTP_USER = process.env.SMTP_USER || "";
-const SMTP_PASS = process.env.SMTP_PASS || "";
-const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER || "noreply@pawgo.com";
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const SMTP_HOST = envs.SMTP_HOST;
+// Normalize SMTP_HOST - remove protocol if present (nodemailer only needs hostname)
+const SMTP_PORT = envs.SMTP_PORT;
+const SMTP_USER = envs.SMTP_USER;
+const SMTP_PASS = envs.SMTP_PASS;
+const SMTP_FROM = envs.SMTP_FROM || SMTP_USER || "noreply@pawgo.com";
+const FRONTEND_URL = envs.FRONTEND_URL;
 
 // Create transporter
 const transporter = nodemailer.createTransport({
@@ -16,26 +18,28 @@ const transporter = nodemailer.createTransport({
   auth:
     SMTP_USER && SMTP_PASS
       ? {
-          user: SMTP_USER,
-          pass: SMTP_PASS,
-        }
+        user: SMTP_USER,
+        pass: SMTP_PASS,
+      }
       : undefined,
 });
 
 // Verify transporter configuration (async, don't block startup)
 if (SMTP_USER && SMTP_PASS) {
+  // Validate SMTP_HOST format 
   // Verify asynchronously to avoid blocking server startup
   setImmediate(() => {
     transporter
       .verify()
       .then(() => {
-        console.log("✅ Email service configured and ready");
+        console.log(`✅ Email service configured and ready (SMTP: ${SMTP_HOST}:${SMTP_PORT})`);
       })
       .catch((error) => {
         console.warn("⚠️ Email service configuration error:", error.message);
         console.warn(
           "⚠️ Emails will not be sent until SMTP is properly configured"
         );
+        // Don't throw - allow server to start even if email is misconfigured
       });
   });
 } else {
@@ -87,8 +91,7 @@ export class EmailService {
     } catch (error) {
       console.error("❌ Error sending email:", error);
       throw new Error(
-        `Failed to send email: ${
-          error instanceof Error ? error.message : "Unknown error"
+        `Failed to send email: ${error instanceof Error ? error.message : "Unknown error"
         }`
       );
     }
@@ -540,28 +543,22 @@ export class EmailService {
               <h2>🧾 Código expirado procesado</h2>
               <p>Se procesó automáticamente un código de descuento expirado.</p>
               <div class="box">
-                <p><span class="k">Código:</span> <span class="v">${
-                  params.code
-                }</span></p>
-                <p><span class="k">Influencer:</span> <span class="v">${
-                  params.influencerName
-                }</span></p>
-                ${
-                  params.influencerEmail
-                    ? `<p><span class="k">Email influencer:</span> <span class="v">${params.influencerEmail}</span></p>`
-                    : ""
-                }
-                <p><span class="k">Total:</span> <span class="v">${
-                  params.currency
-                } ${params.totalAmount}</span></p>
-                <p><span class="k">Comisiones incluidas:</span> <span class="v">${
-                  params.commissionsCount
-                }</span></p>
-                ${
-                  params.influencerPaymentId
-                    ? `<p><span class="k">InfluencerPayment:</span> <span class="v">${params.influencerPaymentId}</span></p>`
-                    : ""
-                }
+                <p><span class="k">Código:</span> <span class="v">${params.code
+      }</span></p>
+                <p><span class="k">Influencer:</span> <span class="v">${params.influencerName
+      }</span></p>
+                ${params.influencerEmail
+        ? `<p><span class="k">Email influencer:</span> <span class="v">${params.influencerEmail}</span></p>`
+        : ""
+      }
+                <p><span class="k">Total:</span> <span class="v">${params.currency
+      } ${params.totalAmount}</span></p>
+                <p><span class="k">Comisiones incluidas:</span> <span class="v">${params.commissionsCount
+      }</span></p>
+                ${params.influencerPaymentId
+        ? `<p><span class="k">InfluencerPayment:</span> <span class="v">${params.influencerPaymentId}</span></p>`
+        : ""
+      }
               </div>
               <p style="margin-top: 16px;">Este email es informativo (no requiere acción).</p>
             </div>

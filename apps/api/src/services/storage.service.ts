@@ -1,13 +1,14 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { envs } from "../config/envs.js";
 
 // Backblaze B2 Configuration (S3-compatible API)
-const B2_APPLICATION_KEY_ID = process.env.B2_APPLICATION_KEY_ID;
-const B2_APPLICATION_KEY = process.env.B2_APPLICATION_KEY;
-const B2_BUCKET_NAME = process.env.B2_BUCKET_NAME;
-const B2_ENDPOINT_RAW = process.env.B2_ENDPOINT || "https://s3.us-west-000.backblazeb2.com";
-const B2_REGION = process.env.B2_REGION || "us-west-000";
-const B2_PUBLIC_URL_RAW = process.env.B2_PUBLIC_URL || B2_ENDPOINT_RAW.replace("s3.", "");
+const B2_APPLICATION_KEY_ID = envs.B2_APPLICATION_KEY_ID;
+const B2_APP_KEY = envs.B2_APPLICATION_KEY || envs.B2_APP_KEY;
+const B2_BUCKET_NAME = envs.B2_BUCKET_NAME;
+const B2_ENDPOINT_RAW = envs.B2_ENDPOINT || "https://s3.us-west-000.backblazeb2.com";
+const B2_REGION = envs.B2_REGION || "us-west-000";
+const B2_PUBLIC_URL_RAW = envs.B2_PUBLIC_URL || (envs.B2_ENDPOINT ? envs.B2_ENDPOINT.replace("s3.", "") : "");
 
 // Normalize endpoints - remove protocol if present for S3 client
 const B2_ENDPOINT = B2_ENDPOINT_RAW.replace(/^https?:\/\//, "");
@@ -33,9 +34,11 @@ export interface UploadResult {
 // Initialize S3 Client for Backblaze B2
 // Note: endpoint should be a full URL with protocol
 // We normalize it to ensure it's correct
-let normalizedEndpoint = B2_ENDPOINT;
-if (!normalizedEndpoint.startsWith("http://") && !normalizedEndpoint.startsWith("https://")) {
+let normalizedEndpoint = B2_ENDPOINT || "";
+if (normalizedEndpoint && !normalizedEndpoint.startsWith("http://") && !normalizedEndpoint.startsWith("https://")) {
   normalizedEndpoint = `https://${normalizedEndpoint}`;
+} else if (!normalizedEndpoint) {
+  normalizedEndpoint = "https://s3.us-west-000.backblazeb2.com";
 }
 
 const s3Client = new S3Client({
@@ -43,7 +46,7 @@ const s3Client = new S3Client({
   region: B2_REGION,
   credentials: {
     accessKeyId: B2_APPLICATION_KEY_ID || "",
-    secretAccessKey: B2_APPLICATION_KEY || "",
+    secretAccessKey: B2_APP_KEY || "",
   },
   forcePathStyle: true, // Required for Backblaze B2
 });
@@ -55,7 +58,7 @@ export class StorageService {
    */
   async initialize() {
     try {
-      if (!B2_APPLICATION_KEY_ID || !B2_APPLICATION_KEY || !B2_BUCKET_NAME) {
+      if (!B2_APPLICATION_KEY_ID || !B2_APP_KEY || !B2_BUCKET_NAME) {
         console.warn(
           "⚠️ Backblaze B2 credentials not configured. File uploads will fail."
         );
@@ -67,7 +70,7 @@ export class StorageService {
           `⚠️ B2_ENDPOINT (${B2_ENDPOINT}) doesn't look like a valid Backblaze B2 endpoint. Expected format: s3.REGION.backblazeb2.com`
         );
       }
-      
+
       console.log(`✅ Backblaze B2 storage initialized (endpoint: ${normalizedEndpoint})`);
     } catch (error) {
       console.error("Error initializing Backblaze B2 storage:", error);
@@ -97,8 +100,7 @@ export class StorageService {
     // Check size
     if (size > MAX_FILE_SIZE) {
       throw new Error(
-        `El archivo es demasiado grande. Tamaño máximo: ${
-          MAX_FILE_SIZE / 1024 / 1024
+        `El archivo es demasiado grande. Tamaño máximo: ${MAX_FILE_SIZE / 1024 / 1024
         }MB`
       );
     }
@@ -282,7 +284,7 @@ export class StorageService {
     return publicUrl;
   }
 
-   private mapTypeToFolder(type: string): string {
+  private mapTypeToFolder(type: string): string {
     const map: Record<string, string> = {
       INVOICES: "facturas",
       PAYMENT_PROOFS: "comprobantes",

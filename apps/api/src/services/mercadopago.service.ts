@@ -1,5 +1,6 @@
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
 import { Order, OrderItem } from "../../../../packages/shared/dist/index.js";
+import { envs } from "../config/envs.js";
 
 const ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN || "";
 
@@ -75,8 +76,17 @@ export class MercadoPagoService {
       throw new Error("Las URLs de retorno (success, failure, pending) son requeridas");
     }
 
+    interface MercadoPagoPreferenceItem {
+      id: string;
+      title: string;
+      description: string;
+      quantity: number;
+      unit_price: number;
+      currency_id: string;
+    }
+
     const preferenceData: {
-      items: any[];
+      items: MercadoPagoPreferenceItem[];
       payer: { email?: string };
       back_urls: { success: string; failure: string; pending: string };
       external_reference: string;
@@ -94,7 +104,7 @@ export class MercadoPagoService {
         pending: pendingUrl,
       },
       external_reference: order.id,
-      notification_url: `${process.env.API_URL || "http://localhost:3001"}/api/webhooks/mercadopago`,
+      notification_url: `${envs.API_URL}/api/webhooks/mercadopago`,
       statement_descriptor: "PAWGO",
       metadata: {
         order_id: order.id,
@@ -124,25 +134,25 @@ export class MercadoPagoService {
         initPoint: preference.init_point || "",
         sandboxInitPoint: preference.sandbox_init_point,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[MercadoPago] Error creating preference:", {
-        error: error?.message || "Unknown error",
-        errorCode: error?.error,
-        status: error?.status,
+        error: error instanceof Error ? error.message : "Unknown error",
+        errorCode: error instanceof Error ? error.name : "Unknown error",
+        status: error instanceof Error ? error.cause : "Unknown error",
         urls: {
           success: successUrl,
           failure: failureUrl,
           pending: pendingUrl,
         },
       });
-      
+
       // Provide more specific error message
-      if (error?.error === "invalid_auto_return") {
+      if (error instanceof Error && error.name === "invalid_auto_return") {
         throw new Error(
           `Error en configuración de URLs de retorno: ${error.message}. Verifica que FRONTEND_URL esté configurado correctamente.`
         );
       }
-      
+
       throw new Error(
         `Error al crear preferencia de pago: ${error instanceof Error ? error.message : "Error desconocido"}`
       );
@@ -187,13 +197,13 @@ export class MercadoPagoService {
     // Handle payment notifications
     if (data.type === "payment") {
       const paymentId = data.data.id;
-      
+
       // Get full payment details to extract external_reference (orderId)
       let orderId: string | undefined = data.data.external_reference;
-      
+
       try {
         const payment = await paymentClient.get({ id: paymentId });
-        
+
         // Extract orderId from external_reference or metadata
         if (!orderId && payment.external_reference) {
           orderId = payment.external_reference;
@@ -201,7 +211,7 @@ export class MercadoPagoService {
           const metadata = payment.metadata as { order_id?: string };
           orderId = metadata?.order_id;
         }
-        
+
         const paymentStatus = await this.getPaymentStatus(paymentId);
 
         if (!paymentStatus) {
