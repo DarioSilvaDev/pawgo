@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import { envs } from "../config/envs";
+import { envs } from "../config/envs.js";
 
 // Email configuration from environment variables
 const SMTP_HOST = envs.SMTP_HOST;
