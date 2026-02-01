@@ -44,6 +44,7 @@ await fastify.register(cors, {
     envs.NODE_ENV === "production"
       ? [envs.FRONTEND_URL]
       : [
+        "https://pawgo-ashy.vercel.app",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3001",
