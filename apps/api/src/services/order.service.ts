@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, Prisma, OrderStatus } from "@prisma/client";
 import { CreateOrderDto, OrderItem } from "../../../../packages/shared/dist/index.js";
 import { DiscountCodeService } from "./discount-code.service.js";
 import { CommissionService } from "./commission.service.js";
@@ -93,7 +93,43 @@ export class OrderService {
       });
     }
 
-    // Lead info will be retrieved when sending email confirmation
+    // Create or update Lead with customer info if provided
+    let leadId: string | null = data.leadId ?? null;
+
+    if (data.customerInfo) {
+      const { email, name, lastName, dni, phoneNumber } = data.customerInfo;
+
+      // Try to find existing lead by email
+      const existingLead = await prisma.lead.findUnique({
+        where: { email },
+      });
+
+      if (existingLead) {
+        // Update existing lead with new information
+        const updatedLead = await prisma.lead.update({
+          where: { id: existingLead.id },
+          data: {
+            name: name || existingLead.name || undefined,
+            lastName: lastName || existingLead.lastName || undefined,
+            dni: dni || existingLead.dni || undefined,
+            phoneNumber: phoneNumber || existingLead.phoneNumber || undefined,
+          },
+        });
+        leadId = updatedLead.id;
+      } else {
+        // Create new lead
+        const newLead = await prisma.lead.create({
+          data: {
+            email,
+            name: name || undefined,
+            lastName: lastName || undefined,
+            dni: dni || undefined,
+            phoneNumber: phoneNumber || undefined,
+          },
+        });
+        leadId = newLead.id;
+      }
+    }
 
     // Calculate shipping cost based on zip code
     // 2900 = free shipping, others = 0 for now (próximamente)
@@ -107,7 +143,7 @@ export class OrderService {
     // Create order
     const order = await prisma.order.create({
       data: {
-        leadId: data.leadId ?? null,
+        leadId: leadId,
         status: "pending",
         subtotal: prismaNumber(subtotal),
         discount: 0,
@@ -341,7 +377,7 @@ export class OrderService {
     const where: Prisma.OrderWhereInput = {};
 
     if (options?.status) {
-      where.status = options.status as any;
+      where.status = options.status as OrderStatus;
     }
 
     if (options?.search) {

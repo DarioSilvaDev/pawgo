@@ -188,6 +188,12 @@ export async function fetchAPI(
           Authorization: newAuthHeader || "",
         },
       });
+    } else {
+      // If refresh failed, clear auth data and trigger logout
+      clearAuthData();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("auth:logout"));
+      }
     }
   }
 

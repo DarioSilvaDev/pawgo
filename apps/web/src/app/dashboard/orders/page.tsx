@@ -274,7 +274,7 @@ export default function OrdersPage() {
           )}
         </div>
       </div>
-      <ToastView />
+      {ToastView}
     </DashboardLayout>
   );
 }

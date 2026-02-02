@@ -3,9 +3,11 @@ import { EventType } from "@pawgo/shared";
 
 export interface DashboardStats {
   totalSales: number;
-  totalRevenue: number;
+  totalRevenue: number; // Solo órdenes pagadas
+  pendingRevenue: number; // Ingresos de órdenes pendientes
   pendingOrders: number;
   completedOrders: number;
+  cancelledOrders: number;
   totalCommissions: number;
   pendingCommissions: number;
   paidCommissions: number;
@@ -58,6 +60,14 @@ export async function getDashboardStats(filters?: {
   const endpoint = `/analytics/stats${queryString ? `?${queryString}` : ""}`;
 
   const response = await fetchAPI(endpoint);
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: "Error desconocido",
+    }));
+    throw new Error(error.error || `HTTP error! status: ${response.status}`);
+  }
+
   return response.json();
 }
 
@@ -75,6 +85,14 @@ export async function getSalesByPeriod(
   params.append("endDate", endDate);
 
   const response = await fetchAPI(`/analytics/sales-by-period?${params.toString()}`);
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: "Error desconocido",
+    }));
+    throw new Error(error.error || `HTTP error! status: ${response.status}`);
+  }
+
   return response.json();
 }
 

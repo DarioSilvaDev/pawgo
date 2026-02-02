@@ -6,8 +6,17 @@ export interface OrderItem {
   quantity: number;
 }
 
+export interface CustomerInfo {
+  name: string;
+  lastName: string;
+  dni: string;
+  phoneNumber: string;
+  email: string;
+}
+
 export interface CreateOrderDto {
   leadId?: string;
+  customerInfo?: CustomerInfo;
   items: OrderItem[];
   shippingAddress?: {
     street: string;

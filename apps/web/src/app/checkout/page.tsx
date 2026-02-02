@@ -9,9 +9,11 @@ import { ProductSelection } from "@/components/checkout/ProductSelection";
 import { DiscountCodeInput } from "@/components/checkout/DiscountCodeInput";
 import { OrderSummary } from "@/components/checkout/OrderSummary";
 import { ShippingAddressForm, ShippingAddress } from "@/components/checkout/ShippingAddressForm";
+import { CustomerInfoForm } from "@/components/checkout/CustomerInfoForm";
+import { CustomerInfo } from "@/lib/order";
 import { getEffectivePrice } from "@/lib/pricing";
 
-const STEPS = ["Seleccionar Producto", "Aplicar Descuento", "Datos de Envío", "Confirmar Compra"];
+const STEPS = ["Seleccionar Producto", "Aplicar Descuento", "Datos del Cliente", "Datos de Envío", "Confirmar Compra"];
 
 // Estructura: Map<productId, Map<variantId, quantity>>
 type SelectedProducts = Map<string, Map<string, number>>;
@@ -26,6 +28,7 @@ export default function CheckoutPage() {
   );
   const [discountAmount, setDiscountAmount] = useState(0);
   const [appliedCode, setAppliedCode] = useState<string | undefined>();
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [shippingAddress, setShippingAddress] = useState<ShippingAddress | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,7 +146,8 @@ export default function CheckoutPage() {
 
   const canProceedToStep2 = orderData.items.length > 0;
   const canProceedToStep3 = canProceedToStep2;
-  const canProceedToStep4 = 
+  const canProceedToStep4 = customerInfo !== null;
+  const canProceedToStep5 = 
     shippingAddress !== null && 
     shippingAddress.zipCode === "2900" &&
     shippingAddress.street.trim() !== "" &&
@@ -158,6 +162,8 @@ export default function CheckoutPage() {
       setCurrentStep(3);
     } else if (currentStep === 3 && canProceedToStep4) {
       setCurrentStep(4);
+    } else if (currentStep === 4 && canProceedToStep5) {
+      setCurrentStep(5);
     }
   };
 
@@ -184,8 +190,15 @@ export default function CheckoutPage() {
         quantity: item.quantity,
       }));
 
+      if (!customerInfo) {
+        setError("Por favor, completa tus datos personales");
+        setIsProcessing(false);
+        return;
+      }
+
       const orderDataToSend: CreateOrderDto = {
         items: orderItems,
+        customerInfo: customerInfo,
         discountCode: appliedCode,
         shippingMethod: "standard",
         shippingAddress: shippingAddress || undefined,
@@ -279,8 +292,18 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Step 3: Shipping Address */}
+            {/* Step 3: Customer Info */}
             {currentStep === 3 && (
+              <div className="space-y-6">
+                <CustomerInfoForm
+                  onInfoChange={setCustomerInfo}
+                  initialInfo={customerInfo}
+                />
+              </div>
+            )}
+
+            {/* Step 4: Shipping Address */}
+            {currentStep === 4 && (
               <div className="space-y-6">
                 <ShippingAddressForm
                   onAddressChange={setShippingAddress}
@@ -289,14 +312,37 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Step 4: Order Confirmation */}
-            {currentStep === 4 && (
+            {/* Step 5: Order Confirmation */}
+            {currentStep === 5 && (
               <div className="space-y-6">
                   <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
                     <h2 className="text-xl md:text-2xl font-semibold text-text-black mb-4">
                       Confirmar Pedido
                     </h2>
                     <div className="space-y-4">
+                      {/* Customer Info Summary */}
+                      {customerInfo && (
+                        <div>
+                          <h3 className="font-semibold text-text-black mb-2">
+                            Datos del Cliente:
+                          </h3>
+                          <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
+                            <p className="text-text-dark-gray">
+                              <span className="font-medium">Nombre:</span> {customerInfo.name} {customerInfo.lastName}
+                            </p>
+                            <p className="text-text-dark-gray">
+                              <span className="font-medium">DNI:</span> {customerInfo.dni}
+                            </p>
+                            <p className="text-text-dark-gray">
+                              <span className="font-medium">Teléfono:</span> {customerInfo.phoneNumber}
+                            </p>
+                            <p className="text-text-dark-gray">
+                              <span className="font-medium">Email:</span> {customerInfo.email}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       <div>
                         <h3 className="font-semibold text-text-black mb-2">
                           Productos seleccionados:
@@ -366,7 +412,8 @@ export default function CheckoutPage() {
                   disabled={
                     (currentStep === 1 && !canProceedToStep2) ||
                     (currentStep === 2 && !canProceedToStep3) ||
-                    (currentStep === 3 && !canProceedToStep4)
+                    (currentStep === 3 && !canProceedToStep4) ||
+                    (currentStep === 4 && !canProceedToStep5)
                   }
                   className="btn-primary flex-1 sm:flex-none sm:px-8 disabled:opacity-50 disabled:cursor-not-allowed order-1 sm:order-2"
                 >

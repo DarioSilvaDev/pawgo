@@ -64,27 +64,8 @@ export function AdminDashboard() {
 
       {/* Main Metrics - Sales & Revenue */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="group relative bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-1">
-                Ingresos Totales
-              </h3>
-              <p className="text-2xl font-bold text-primary-turquoise">
-                {formatCurrency(stats.totalRevenue)}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-primary-turquoise/10 rounded-lg flex items-center justify-center">
-              <span className="text-2xl">💰</span>
-            </div>
-          </div>
-          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg max-w-xs text-center">
-            Suma total de todos los ingresos generados por las ventas
-            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-          </div>
-        </div>
 
-        <div className="group relative bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all">
+                <div className="group relative bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-medium text-gray-600 mb-1">
@@ -94,8 +75,8 @@ export function AdminDashboard() {
                 {stats.totalSales}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                {stats.completedOrders} completados · {stats.pendingOrders}{" "}
-                pendientes
+                {stats.completedOrders} pagados · {stats.pendingOrders}{" "}
+                pendientes · {stats.cancelledOrders} cancelados
               </p>
             </div>
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -104,6 +85,53 @@ export function AdminDashboard() {
           </div>
           <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg max-w-xs text-center">
             Número total de pedidos realizados en el sistema
+            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+          </div>
+        </div>
+
+
+        <div className="group relative bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-gray-600 mb-1">
+                Ingresos Brutos Totales
+              </h3>
+              <p className="text-2xl font-bold text-primary-turquoise">
+                {formatCurrency(stats.totalRevenue)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {stats.completedOrders} órdenes pagadas
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-primary-turquoise/10 rounded-lg flex items-center justify-center">
+              <span className="text-2xl">💰</span>
+            </div>
+          </div>
+          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg max-w-xs text-center">
+            Suma total de ingresos de órdenes pagadas (no incluye canceladas)
+            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+          </div>
+        </div>
+
+        <div className="group relative bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-gray-600 mb-1">
+                Ingresos Pendientes
+              </h3>
+              <p className="text-2xl font-bold text-amber-600">
+                {formatCurrency(stats.pendingRevenue)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {stats.pendingOrders} órdenes pendientes
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
+              <span className="text-2xl">⏳</span>
+            </div>
+          </div>
+          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg max-w-xs text-center">
+            Ingresos potenciales de órdenes pendientes de pago
             <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
           </div>
         </div>
@@ -260,48 +288,6 @@ export function AdminDashboard() {
         </Link>
       </div>
 
-      {/* Top Influencers */}
-      {stats.topInfluencers.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Top Influencers</h2>
-            <Link
-              href="/dashboard/influencers"
-              className="text-sm text-primary-turquoise hover:text-primary-turquoise/80"
-            >
-              Ver todos →
-            </Link>
-          </div>
-          <div className="space-y-3">
-            {stats.topInfluencers.slice(0, 5).map((influencer, index) => (
-              <div
-                key={influencer.id}
-                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="w-8 h-8 bg-primary-turquoise/10 rounded-full flex items-center justify-center text-primary-turquoise font-bold">
-                    {index + 1}
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      {influencer.name}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {influencer.totalSales} ventas ·{" "}
-                      {formatCurrency(influencer.totalCommissions)} comisiones
-                    </p>
-                  </div>
-                </div>
-                {influencer.pendingCommissions > 0 && (
-                  <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-medium">
-                    {formatCurrency(influencer.pendingCommissions)} pendiente
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

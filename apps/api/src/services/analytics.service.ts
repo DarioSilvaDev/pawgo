@@ -11,10 +11,12 @@ const prisma = new PrismaClient();
 export interface DashboardStats {
   // Sales
   totalSales: number;
-  totalRevenue: number;
+  totalRevenue: number; // Solo órdenes pagadas
+  pendingRevenue: number; // Ingresos de órdenes pendientes
   pendingOrders: number;
   completedOrders: number;
-  
+  cancelledOrders: number;
+
   // Commissions
   totalCommissions: number;
   pendingCommissions: number;
@@ -22,7 +24,7 @@ export interface DashboardStats {
   totalCommissionAmount: number;
   pendingCommissionAmount: number;
   paidCommissionAmount: number;
-  
+
   // Influencers
   totalInfluencers: number;
   activeInfluencers: number;
@@ -33,16 +35,16 @@ export interface DashboardStats {
     totalCommissions: number;
     pendingCommissions: number;
   }>;
-  
+
   // Discount Codes
   totalDiscountCodes: number;
   activeDiscountCodes: number;
   totalCodeUses: number;
-  
+
   // Leads
   totalLeads: number;
   recentLeads: number; // Last 7 days
-  
+
   // Payments
   pendingPayments: number;
   approvedPayments: number;
@@ -65,13 +67,17 @@ export class AnalyticsService {
     startDate?: Date,
     endDate?: Date
   ): Promise<DashboardStats> {
+    console.log("═══════════════════════════════════════════════════════");
+    console.log("🔍 [Analytics] getDashboardStats CALLED");
+    console.log("═══════════════════════════════════════════════════════");
+
     const dateFilter = startDate && endDate
       ? {
-          createdAt: {
-            gte: startDate,
-            lte: endDate,
-          },
-        }
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      }
       : {};
 
     // Sales statistics
@@ -80,9 +86,42 @@ export class AnalyticsService {
     });
 
     const totalSales = orders.length;
-    const totalRevenue = orders.reduce((sum, order) => sum + n(order.total), 0);
+    console.log(`📊 [Analytics] Total orders found: ${totalSales}`);
+
+    // Ingresos totales: solo órdenes pagadas
+    const paidOrders = orders.filter((o) => o.status === OrderStatus.paid);
+    console.log(`✅ [Analytics] Paid orders: ${paidOrders.length}`);
+
+    const totalRevenue = paidOrders.reduce((sum, order) => {
+      const orderTotal = n(order.total);
+      if (isNaN(orderTotal)) {
+        console.error(`❌ [Analytics] NaN for order ${order.id}, total:`, order.total, typeof order.total);
+        return sum;
+      }
+      return sum + orderTotal;
+    }, 0);
+
+    // Ingresos pendientes: órdenes pendientes
+    const pendingOrdersList = orders.filter((o) => o.status === OrderStatus.pending);
+    console.log(`⏳ [Analytics] Pending orders: ${pendingOrdersList.length}`);
+
+    const pendingRevenue = pendingOrdersList.reduce((sum, order) => {
+      const orderTotal = n(order.total);
+      if (isNaN(orderTotal)) {
+        console.error(`❌ [Analytics] NaN for pending order ${order.id}, total:`, order.total, typeof order.total);
+        return sum;
+      }
+      return sum + orderTotal;
+    }, 0);
+
     const pendingOrders = orders.filter((o) => o.status === OrderStatus.pending).length;
     const completedOrders = orders.filter((o) => o.status === OrderStatus.paid).length;
+    const cancelledOrders = orders.filter((o) => o.status === OrderStatus.cancelled).length;
+
+    console.log(`💰 [Analytics] Total Revenue: ${totalRevenue} (isNaN: ${isNaN(totalRevenue)})`);
+    console.log(`💰 [Analytics] Pending Revenue: ${pendingRevenue} (isNaN: ${isNaN(pendingRevenue)})`);
+    console.log(`📊 [Analytics] Orders breakdown: ${completedOrders} paid, ${pendingOrders} pending, ${cancelledOrders} cancelled`);
+    console.log("═══════════════════════════════════════════════════════");
 
     // Commission statistics
     const commissions = await prisma.commission.findMany({
@@ -197,11 +236,13 @@ export class AnalyticsService {
       )
       .reduce((sum, p) => sum + n(p.totalAmount), 0);
 
-    return {
+    const result = {
       totalSales,
-      totalRevenue,
+      totalRevenue: isNaN(totalRevenue) ? 0 : totalRevenue,
+      pendingRevenue: isNaN(pendingRevenue) ? 0 : pendingRevenue,
       pendingOrders,
       completedOrders,
+      cancelledOrders,
       totalCommissions,
       pendingCommissions,
       paidCommissions,
@@ -221,6 +262,14 @@ export class AnalyticsService {
       totalPendingAmount,
       totalApprovedAmount,
     };
+
+    console.log("📤 [Analytics] Returning result:", {
+      totalRevenue: result.totalRevenue,
+      pendingRevenue: result.pendingRevenue,
+      totalSales: result.totalSales,
+    });
+
+    return result;
   }
 
   /**

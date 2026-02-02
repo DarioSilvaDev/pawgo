@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { Toast, type ToastType } from "@/components/ui/Toast";
 
 export interface ShowToastOptions {
@@ -25,7 +25,7 @@ export function useToast() {
     });
   }, []);
 
-  const ToastView = useMemo(() => {
+  const ToastView: ReactElement | null = useMemo(() => {
     if (!toast) return null;
     return (
       <Toast

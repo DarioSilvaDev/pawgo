@@ -29,7 +29,7 @@ import multipart from "@fastify/multipart";
 
 const fastify = Fastify({
   logger: {
-    level: envs.NODE_ENV === "production" ? "info" : "debug",
+    level: envs.NODE_ENV === "development" ? "info" : "debug",
   },
 });
 

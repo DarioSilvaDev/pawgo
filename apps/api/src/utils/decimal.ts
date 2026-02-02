@@ -12,8 +12,31 @@ export function prismaDecimal(
 export function prismaNumber(
   value: Prisma.Decimal.Value | null | undefined
 ): number {
-  if (value === null || value === undefined) return 0;
-  return new Prisma.Decimal(value).toNumber();
+  if (value === null || value === undefined) {
+    console.warn("[prismaNumber] Received null/undefined value, returning 0");
+    return 0;
+  }
+  
+  try {
+    // Si ya es un número, retornarlo directamente
+    if (typeof value === "number") {
+      return isNaN(value) ? 0 : value;
+    }
+    
+    // Si es un Decimal de Prisma, convertirlo
+    if (value instanceof Prisma.Decimal) {
+      const num = value.toNumber();
+      return isNaN(num) ? 0 : num;
+    }
+    
+    // Si es string u otro tipo, crear Decimal y convertir
+    const decimal = new Prisma.Decimal(value);
+    const num = decimal.toNumber();
+    return isNaN(num) ? 0 : num;
+  } catch (error) {
+    console.error("[prismaNumber] Error converting value:", value, error);
+    return 0;
+  }
 }
 
 /**

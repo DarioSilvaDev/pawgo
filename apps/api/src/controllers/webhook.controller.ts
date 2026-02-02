@@ -1,7 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { MercadoPagoService } from "../services/mercadopago.service.js";
 import { OrderService } from "../services/order.service.js";
-import { emailService } from "../services/email.service.js";
 import { OrderStatus, PaymentStatus, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -79,22 +78,29 @@ export function createWebhookController(
 
         // Update payment status
         let paymentStatus: PaymentStatus = PaymentStatus.pending;
-        let orderStatus = payment.order.status;
+        let orderStatus: OrderStatus | null = null;
 
         if (result.status === "approved") {
           paymentStatus = PaymentStatus.approved;
           orderStatus = OrderStatus.paid;
         } else if (result.status === "rejected") {
           paymentStatus = PaymentStatus.rejected;
+          // Si el pago es rechazado, cancelar la orden
+          orderStatus = OrderStatus.cancelled;
         } else if (result.status === "cancelled") {
           paymentStatus = PaymentStatus.cancelled;
+          // Si el pago es cancelado, cancelar la orden
+          orderStatus = OrderStatus.cancelled;
         } else if (result.status === "refunded") {
           paymentStatus = PaymentStatus.refunded;
+          // Si el pago es reembolsado, cancelar la orden
+          orderStatus = OrderStatus.cancelled;
         } else if (result.status === "in_process" || result.status === "pending") {
           paymentStatus = PaymentStatus.pending;
+          // Mantener el estado actual de la orden
         }
 
-        console.log(`[Webhook] Updating payment ${payment.id} to status: ${paymentStatus}, order status: ${orderStatus}`);
+        console.log(`[Webhook] Updating payment ${payment.id} to status: ${paymentStatus}, order status: ${orderStatus || payment.order.status}`);
 
         // Update payment
         await prisma.payment.update({
@@ -105,10 +111,10 @@ export function createWebhookController(
           },
         });
 
-        // Update order status if payment is approved
-        if (orderStatus === OrderStatus.paid) {
-          console.log(`[Webhook] Updating order ${payment.orderId} to paid status`);
-          await orderService.updateStatus(payment.orderId, OrderStatus.paid);
+        // Update order status if needed
+        if (orderStatus) {
+          console.log(`[Webhook] Updating order ${payment.orderId} to ${orderStatus} status`);
+          await orderService.updateStatus(payment.orderId, orderStatus);
         }
 
         console.log(`[Webhook] Successfully processed webhook for payment ${result.paymentId}`);

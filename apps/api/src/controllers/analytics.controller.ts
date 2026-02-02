@@ -21,6 +21,7 @@ export function createAnalyticsController(analyticsService: AnalyticsService) {
      */
     async getStats(request: FastifyRequest, reply: FastifyReply) {
       try {
+        console.log("[Analytics Controller] getStats called");
         const query = getStatsQuerySchema.parse(request.query);
 
         const startDate = query.startDate
@@ -28,10 +29,16 @@ export function createAnalyticsController(analyticsService: AnalyticsService) {
           : undefined;
         const endDate = query.endDate ? new Date(query.endDate) : undefined;
 
+        console.log("[Analytics Controller] Date filters:", { startDate, endDate });
         const stats = await analyticsService.getDashboardStats(
           startDate,
           endDate
         );
+        console.log("[Analytics Controller] Stats calculated:", {
+          totalRevenue: stats.totalRevenue,
+          pendingRevenue: stats.pendingRevenue,
+          totalSales: stats.totalSales,
+        });
 
         reply.send(stats);
       } catch (error) {

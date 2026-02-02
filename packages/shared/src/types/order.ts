@@ -38,8 +38,17 @@ export interface Address {
   country: string;
 }
 
+export interface CustomerInfo {
+  name: string;
+  lastName: string;
+  dni: string;
+  phoneNumber: string;
+  email: string;
+}
+
 export interface CreateOrderDto {
   leadId?: string;
+  customerInfo?: CustomerInfo; // Datos del cliente para crear/actualizar Lead
   items: CreateOrderItemDto[];
   shippingAddress?: Address;
   shippingMethod?: string;
