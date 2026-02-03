@@ -46,4 +46,13 @@ export async function uploadRoutes(
     },
     uploadController.uploadContent
   );
+
+  // Upload product image (admin only)
+  fastify.post(
+    "/upload/product-image",
+    {
+      preHandler: authenticate,
+    },
+    uploadController.uploadProductImage
+  );
 }

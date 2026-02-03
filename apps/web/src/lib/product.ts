@@ -141,3 +141,75 @@ export async function deleteVariant(variantId: string): Promise<void> {
     method: "DELETE",
   });
 }
+
+/**
+ * Upload product image
+ * @param file - The image file to upload
+ * @param productId - Optional product ID. If provided, the image will be automatically added to the product.
+ */
+export async function uploadProductImage(
+  file: File,
+  productId?: string
+): Promise<{ url: string; filename: string }> {
+  console.log("🌐 [uploadProductImage] Iniciando request de subida");
+  console.log("  - File:", file.name, `(${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+  console.log("  - ProductId:", productId || "undefined");
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+  console.log("  - API URL:", API_URL);
+
+  const token = localStorage.getItem("pawgo_access_token");
+
+  if (!token) {
+    console.error("❌ [uploadProductImage] No hay token de autenticación");
+    throw new Error("No autenticado");
+  }
+  console.log("✅ [uploadProductImage] Token encontrado");
+
+  const formData = new FormData();
+  formData.append("file", file);
+  if (productId) {
+    formData.append("productId", productId);
+    console.log("➕ [uploadProductImage] productId agregado al FormData");
+  }
+
+  console.log("📤 [uploadProductImage] Enviando request a:", `${API_URL}/api/upload/product-image`);
+  const startTime = Date.now();
+
+  try {
+    const response = await fetch(`${API_URL}/api/upload/product-image`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const requestTime = Date.now() - startTime;
+    console.log(`📥 [uploadProductImage] Respuesta recibida en ${requestTime}ms`);
+    console.log("  - Status:", response.status, response.statusText);
+    console.log("  - OK:", response.ok);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: "Error desconocido",
+      }));
+      console.error("❌ [uploadProductImage] Error en la respuesta:", error);
+      throw new Error(error.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log("✅ [uploadProductImage] Subida exitosa:");
+    console.log("  - URL:", result.url);
+    console.log("  - Filename:", result.filename);
+
+    return result;
+  } catch (error) {
+    console.error("❌ [uploadProductImage] Error en fetch:", error);
+    if (error instanceof Error) {
+      console.error("  - Mensaje:", error.message);
+      console.error("  - Stack:", error.stack);
+    }
+    throw error;
+  }
+}

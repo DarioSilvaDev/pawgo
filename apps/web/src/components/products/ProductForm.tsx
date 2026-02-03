@@ -7,6 +7,7 @@ import {
   getProduct,
   createProduct,
   updateProduct,
+  uploadProductImage,
   type Product,
   type CreateProductDto,
   type UpdateProductDto,
@@ -33,7 +34,7 @@ export function ProductForm({ productId }: ProductFormProps) {
     isActive: true,
   });
 
-  const [newImageUrl, setNewImageUrl] = useState("");
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   const loadProduct = useCallback(async () => {
     if (!productId) return;
@@ -141,13 +142,98 @@ export function ProductForm({ productId }: ProductFormProps) {
     }
   };
 
-  const addImage = () => {
-    if (newImageUrl && !formData.images.includes(newImageUrl)) {
-      setFormData({
-        ...formData,
-        images: [...formData.images, newImageUrl],
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, productId: string) => {
+    console.log("🖼️ [ProductForm] Iniciando carga de imágenes");
+    console.log("📦 [ProductForm] productId:", productId || "undefined (producto nuevo)");
+    
+    const files = e.target.files;
+    if (!files || files.length === 0) {
+      console.warn("⚠️ [ProductForm] No se seleccionaron archivos");
+      return;
+    }
+
+    console.log(`📁 [ProductForm] Archivos seleccionados: ${files.length}`);
+    
+    const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+
+    try {
+      setUploadingImages(true);
+      console.log("⏳ [ProductForm] Estado de carga activado");
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        console.log(`\n📄 [ProductForm] Procesando archivo ${i + 1}/${files.length}:`);
+        console.log("  - Nombre:", file.name);
+        console.log("  - Tipo:", file.type);
+        console.log("  - Tamaño:", `${(file.size / 1024 / 1024).toFixed(2)} MB`);
+
+        // Validar tipo de archivo
+        if (!allowedTypes.includes(file.type)) {
+          console.error(`❌ [ProductForm] Tipo de archivo inválido: ${file.type}`);
+          showToast({
+            type: "error",
+            message: `El archivo ${file.name} no es válido. Solo se permiten PNG, JPG, JPEG o WEBP.`,
+            durationMs: 5000,
+          });
+          continue;
+        }
+        console.log("✅ [ProductForm] Tipo de archivo válido");
+
+        // Validar tamaño
+        if (file.size > maxSize) {
+          console.error(`❌ [ProductForm] Archivo demasiado grande: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
+          showToast({
+            type: "error",
+            message: `El archivo ${file.name} es demasiado grande. Tamaño máximo: 10MB.`,
+            durationMs: 5000,
+          });
+          continue;
+        }
+        console.log("✅ [ProductForm] Tamaño de archivo válido");
+
+        // Subir imagen (pasar productId solo si existe, para productos nuevos será undefined)
+        console.log("🚀 [ProductForm] Iniciando subida al servidor...");
+        const startTime = Date.now();
+        
+        const result = await uploadProductImage(file, productId || undefined);
+        
+        const uploadTime = Date.now() - startTime;
+        console.log(`✅ [ProductForm] Imagen subida exitosamente en ${uploadTime}ms`);
+        console.log("  - URL:", result.url);
+        console.log("  - Filename:", result.filename);
+
+        // Agregar URL a la lista de imágenes si no existe
+        if (!formData.images.includes(result.url)) {
+          console.log("➕ [ProductForm] Agregando URL a la lista de imágenes");
+          setFormData({
+            ...formData,
+            images: [...formData.images, result.url],
+          });
+          console.log(`📋 [ProductForm] Total de imágenes: ${formData.images.length + 1}`);
+        } else {
+          console.log("⚠️ [ProductForm] La URL ya existe en la lista, no se agrega");
+        }
+      }
+      
+      console.log("✅ [ProductForm] Proceso de carga completado");
+    } catch (err) {
+      console.error("❌ [ProductForm] Error al subir imagen:", err);
+      console.error("  - Tipo:", err instanceof Error ? err.constructor.name : typeof err);
+      console.error("  - Mensaje:", err instanceof Error ? err.message : String(err));
+      showToast({
+        type: "error",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Error al subir imagen. Por favor, intenta nuevamente.",
+        durationMs: 6000,
       });
-      setNewImageUrl("");
+    } finally {
+      setUploadingImages(false);
+      console.log("🔄 [ProductForm] Estado de carga desactivado");
+      // Limpiar el input para permitir seleccionar el mismo archivo nuevamente
+      e.target.value = "";
     }
   };
 
@@ -271,29 +357,44 @@ export function ProductForm({ productId }: ProductFormProps) {
           {/* Imágenes */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Imágenes (URLs)
+              Imágenes
             </label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="url"
-                value={newImageUrl}
-                onChange={(e) => setNewImageUrl(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addImage();
-                  }
-                }}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-turquoise focus:border-transparent"
-                placeholder="https://ejemplo.com/imagen.jpg"
-              />
-              <button
-                type="button"
-                onClick={addImage}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            <p className="text-xs text-gray-500 mb-2">
+              Formatos permitidos: PNG, JPG, JPEG, WEBP. Tamaño máximo: 10MB
+            </p>
+            <div className="mb-2">
+              <label
+                htmlFor="image-upload"
+                className={`inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg cursor-pointer transition-colors ${
+                  uploadingImages
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-white text-gray-700 hover:bg-gray-50"
+                }`}
               >
-                Agregar
-              </button>
+                <svg
+                  className="w-5 h-5 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                  />
+                </svg>
+                {uploadingImages ? "Subiendo..." : "Seleccionar imágenes"}
+              </label>
+              <input
+                id="image-upload"
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp"
+                multiple
+                onChange={(e) => handleImageUpload(e, productId as string)}
+                disabled={uploadingImages}
+                className="hidden"
+              />
             </div>
             {formData.images.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
