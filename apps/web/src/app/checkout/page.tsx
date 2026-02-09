@@ -104,7 +104,7 @@ export default function CheckoutPage() {
       shippingCost,
       total,
     };
-  }, [selectedProducts, products, discountAmount, shippingAddress]);
+  }, [selectedProducts, products, discountAmount]);
 
   const handleSelectProduct = (
     productId: string,

@@ -269,7 +269,7 @@ export function AnalyticsDashboard() {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">👆</span>
-                  <span className="text-sm sm:text-base font-medium text-gray-700">Clicks "Saber más"</span>
+                  <span className="text-sm sm:text-base font-medium text-gray-700">Clicks &quot;Saber más&quot;</span>
                 </div>
                 <span className="text-lg sm:text-xl font-bold text-gray-900">{eventMetrics.ctaClicks.toLocaleString()}</span>
               </div>
@@ -293,7 +293,7 @@ export function AnalyticsDashboard() {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">🛒</span>
-                  <span className="text-sm sm:text-base font-medium text-gray-700">Clicks "Quiero uno"</span>
+                  <span className="text-sm sm:text-base font-medium text-gray-700">Clicks &quot;Quiero uno&quot;</span>
                 </div>
                 <span className="text-lg sm:text-xl font-bold text-gray-900">{eventMetrics.buyIntentClicks.toLocaleString()}</span>
               </div>
@@ -338,12 +338,12 @@ export function AnalyticsDashboard() {
               <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4">
                 <p className="text-xs sm:text-sm text-purple-700 font-medium mb-1">Tasa de Click (CTR)</p>
                 <p className="text-xl sm:text-2xl font-bold text-purple-900">{eventMetrics.clickThroughRate.toFixed(2)}%</p>
-                <p className="text-xs text-purple-600 mt-1">Vistas → "Quiero uno"</p>
+                <p className="text-xs text-purple-600 mt-1">Vistas → &quot;Quiero uno&quot;</p>
               </div>
               <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4">
                 <p className="text-xs sm:text-sm text-green-700 font-medium mb-1">Tasa de Conversión</p>
                 <p className="text-xl sm:text-2xl font-bold text-green-900">{eventMetrics.conversionRate.toFixed(2)}%</p>
-                <p className="text-xs text-green-600 mt-1">"Quiero uno" → Lead</p>
+                <p className="text-xs text-green-600 mt-1">&quot;Quiero uno&quot; → Lead</p>
               </div>
             </div>
           </div>
