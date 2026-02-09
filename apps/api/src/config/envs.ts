@@ -19,11 +19,10 @@ interface IEnvVars {
     JOB_DISCOUNT_CODE_SCAN_CRON: string;
     B2_ENDPOINT: string;
     B2_REGION: string;
-    B2_BUCKET_NAME: string;
-    B2_APPLICATION_KEY_ID: string;
-    B2_APPLICATION_KEY: string;
+    B2_BUCKET: string;
+    B2_KEY_ID: string;
     B2_APP_KEY: string;
-    B2_PUBLIC_URL: string;
+    B2_BUCKET_ID: string;
 }
 // Schema de validación de variables de entorno
 const envsSchema = z
@@ -73,13 +72,12 @@ const envsSchema = z
         JOB_DISCOUNT_CODE_SCAN_CRON: z.string().default("0 */6 * * *").describe("El cron para el job de escaneo de códigos de descuento"),
 
         // Backblaze B2 (opcionales - solo necesarios si se usa almacenamiento en B2)
-        B2_ENDPOINT: z.string().url().optional().describe("El endpoint de Backblaze B2"),
-        B2_REGION: z.string().optional().describe("La región de Backblaze B2"),
-        B2_BUCKET_NAME: z.string().optional().describe("El nombre del bucket de Backblaze B2"),
-        B2_APPLICATION_KEY_ID: z.string().optional().describe("El ID de la aplicación de Backblaze B2"),
-        B2_APPLICATION_KEY: z.string().optional().describe("La clave de aplicación de Backblaze B2"),
-        B2_APP_KEY: z.string().optional().describe("La clave de aplicación de Backblaze B2 (alias de B2_APPLICATION_KEY)"),
-        B2_PUBLIC_URL: z.string().url().optional().describe("La URL pública del bucket de Backblaze B2"),
+        B2_ENDPOINT: z.string().describe("El endpoint de Backblaze B2"),
+        B2_REGION: z.string().describe("La región de Backblaze B2"),
+        B2_BUCKET: z.string().describe("El nombre del bucket de Backblaze B2"),
+        B2_KEY_ID: z.string().describe("Alias para el ID de aplicación (Key ID)"),
+        B2_APP_KEY: z.string().describe("La clave de aplicación de Backblaze B2 (alias de B2_APPLICATION_KEY)"),
+        B2_BUCKET_ID: z.string().describe("El ID del bucket de Backblaze B2"),
     })
     .passthrough(); // Permite propiedades adicionales (variables de entorno del sistema)
 

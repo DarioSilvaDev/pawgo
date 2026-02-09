@@ -22,10 +22,12 @@ export function LeadFormModal({ onClose }: LeadFormModalProps) {
     try {
       await submitLead({
         email,
+        incentive: "none",
       });
 
       trackEvent(EventType.LEAD_SUBMITTED, {
         source: "modal_avisame",
+        incentive: "none",
       });
 
       showToast({

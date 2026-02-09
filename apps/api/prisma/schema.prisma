@@ -510,3 +510,17 @@ model InfluencerInvoice {
   @@index([createdAt])
   @@map("influencer_invoices")
 }
+
+// Configuración de la aplicación (editable solo por admin)
+model AppConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique // Clave única de configuración (ej: "cta_config")
+  value     Json // Valor de configuración en formato JSON
+  version   Int      @default(1) // Versión de la configuración (para versionado futuro)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([key])
+  @@index([createdAt])
+  @@map("app_config")
+}

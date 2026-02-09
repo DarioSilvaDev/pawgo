@@ -18,6 +18,7 @@ export function LeadForm() {
     try {
       await submitLead({
         email,
+        incentive: "none",
       });
 
       trackEvent(EventType.LEAD_SUBMITTED, {

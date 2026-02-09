@@ -33,5 +33,21 @@ export async function analyticsRoutes(
     },
     controller.getSalesByPeriod
   );
+
+  fastify.get(
+    "/analytics/event-metrics",
+    {
+      preHandler: [authenticate, requireAdmin],
+    },
+    controller.getEventMetrics
+  );
+
+  fastify.get(
+    "/analytics/event-metrics-trend",
+    {
+      preHandler: [authenticate, requireAdmin],
+    },
+    controller.getEventMetricsTrend
+  );
 }
 

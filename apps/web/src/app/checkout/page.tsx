@@ -37,7 +37,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     // Check if there's a payment process in sessionStorage
     const paymentInProgress = sessionStorage.getItem("paymentInProgress");
-    
+
     // If user navigated back and there's no active payment, reset processing state
     if (!paymentInProgress) {
       setIsProcessing(false);
@@ -93,8 +93,8 @@ export default function CheckoutPage() {
       }
     });
 
-    // Calcular shippingCost: gratis si zipCode es 2900, 0 para otros (próximamente)
-    const shippingCost = shippingAddress?.zipCode === "2900" ? 0 : 0;
+    // Calcular shippingCost: gratis
+    const shippingCost = 0;
     const total = Math.max(0, subtotal - discountAmount + shippingCost);
 
     return {
@@ -112,10 +112,10 @@ export default function CheckoutPage() {
     quantity: number
   ) => {
     const newSelected = new Map(selectedProducts);
-    
+
     // Obtener o crear el mapa de variantes para este producto
     const productVariants = newSelected.get(productId) || new Map<string, number>();
-    
+
     if (quantity > 0) {
       // Agregar o actualizar la cantidad de la variante
       productVariants.set(variantId, quantity);
@@ -123,14 +123,14 @@ export default function CheckoutPage() {
       // Remover la variante si la cantidad es 0
       productVariants.delete(variantId);
     }
-    
+
     // Si el producto tiene variantes seleccionadas, actualizarlo, sino eliminarlo
     if (productVariants.size > 0) {
       newSelected.set(productId, productVariants);
     } else {
       newSelected.delete(productId);
     }
-    
+
     setSelectedProducts(newSelected);
   };
 
@@ -147,9 +147,9 @@ export default function CheckoutPage() {
   const canProceedToStep2 = orderData.items.length > 0;
   const canProceedToStep3 = canProceedToStep2;
   const canProceedToStep4 = customerInfo !== null;
-  const canProceedToStep5 = 
-    shippingAddress !== null && 
-    shippingAddress.zipCode === "2900" &&
+  const canProceedToStep5 =
+    shippingAddress !== null &&
+    shippingAddress.zipCode &&
     shippingAddress.street.trim() !== "" &&
     shippingAddress.city.trim() !== "" &&
     shippingAddress.state.trim() !== "" &&
@@ -216,7 +216,7 @@ export default function CheckoutPage() {
 
       // 4. Redirect user to MercadoPago checkout
       window.location.href = payment.paymentLink;
-      
+
       // Note: The user will be redirected back to /checkout/success, /checkout/failure, or /checkout/pending
       // after completing the payment on MercadoPago
       // sessionStorage will be cleared in those pages
@@ -315,84 +315,110 @@ export default function CheckoutPage() {
             {/* Step 5: Order Confirmation */}
             {currentStep === 5 && (
               <div className="space-y-6">
-                  <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
-                    <h2 className="text-xl md:text-2xl font-semibold text-text-black mb-4">
-                      Confirmar Pedido
-                    </h2>
-                    <div className="space-y-4">
-                      {/* Customer Info Summary */}
-                      {customerInfo && (
-                        <div>
-                          <h3 className="font-semibold text-text-black mb-2">
-                            Datos del Cliente:
-                          </h3>
-                          <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
-                            <p className="text-text-dark-gray">
-                              <span className="font-medium">Nombre:</span> {customerInfo.name} {customerInfo.lastName}
-                            </p>
-                            <p className="text-text-dark-gray">
-                              <span className="font-medium">DNI:</span> {customerInfo.dni}
-                            </p>
-                            <p className="text-text-dark-gray">
-                              <span className="font-medium">Teléfono:</span> {customerInfo.phoneNumber}
-                            </p>
-                            <p className="text-text-dark-gray">
-                              <span className="font-medium">Email:</span> {customerInfo.email}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
+                <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+                  <h2 className="text-xl md:text-2xl font-semibold text-text-black mb-4">
+                    Confirmar Pedido
+                  </h2>
+                  <div className="space-y-4">
+                    {/* Customer Info Summary */}
+                    {customerInfo && (
                       <div>
                         <h3 className="font-semibold text-text-black mb-2">
-                          Productos seleccionados:
+                          Datos del Cliente:
                         </h3>
-                        <div className="space-y-2">
-                          {orderData.items.map((item, index) => (
-                            <div
-                              key={index}
-                              className="flex justify-between text-sm border-b border-gray-100 pb-2"
-                            >
-                              <span className="text-text-dark-gray">
-                                {item.product.name} - {item.variant.name} (x
-                                {item.quantity})
-                              </span>
-                              <span className="font-medium">
-                                $
-                                {(
-                                  Number(item.variant.price ?? item.product.basePrice) * item.quantity
-                                ).toLocaleString("es-AR")}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {appliedCode && (
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                          <p className="text-sm text-green-800">
-                            Código aplicado: <strong>{appliedCode}</strong>
+                        <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
+                          <p className="text-text-dark-gray">
+                            <span className="font-medium">Nombre:</span> {customerInfo.name} {customerInfo.lastName}
+                          </p>
+                          <p className="text-text-dark-gray">
+                            <span className="font-medium">DNI:</span> {customerInfo.dni}
+                          </p>
+                          <p className="text-text-dark-gray">
+                            <span className="font-medium">Teléfono:</span> {customerInfo.phoneNumber}
+                          </p>
+                          <p className="text-text-dark-gray">
+                            <span className="font-medium">Email:</span> {customerInfo.email}
                           </p>
                         </div>
-                      )}
+                      </div>
+                    )}
 
-                      {error && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                          <p className="text-sm text-red-800">{error}</p>
+                    {/* Shipping Address Summary */}
+                    {shippingAddress && (
+                      <div>
+                        <h3 className="font-semibold text-text-black mb-2">
+                          Datos de Envío:
+                        </h3>
+                        <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
+                          <p className="text-text-dark-gray">
+                            <span className="font-medium">Dirección:</span> {shippingAddress.street}
+                          </p>
+                          <p className="text-text-dark-gray">
+                            <span className="font-medium">Ciudad:</span> {shippingAddress.city}
+                          </p>
+                          <p className="text-text-dark-gray">
+                            <span className="font-medium">Provincia:</span> {shippingAddress.state}
+                          </p>
+                          <p className="text-text-dark-gray">
+                            <span className="font-medium">Código Postal:</span> {shippingAddress.zipCode}
+                          </p>
+                          <p className="text-text-dark-gray">
+                            <span className="font-medium">País:</span> {shippingAddress.country}
+                          </p>
                         </div>
-                      )}
+                      </div>
+                    )}
 
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <p className="text-sm text-blue-800 mb-2">
-                          <strong>Próximo paso:</strong> Al completar el pedido, serás redirigido a MercadoPago
-                          para realizar el pago de forma segura.
-                        </p>
-                        <p className="text-xs text-blue-700">
-                          Una vez completado el pago, serás redirigido de vuelta a nuestro sitio.
-                        </p>
+                    <div>
+                      <h3 className="font-semibold text-text-black mb-2">
+                        Productos seleccionados:
+                      </h3>
+                      <div className="space-y-2">
+                        {orderData.items.map((item, index) => (
+                          <div
+                            key={index}
+                            className="flex justify-between text-sm border-b border-gray-100 pb-2"
+                          >
+                            <span className="text-text-dark-gray">
+                              {item.product.name} - {item.variant.name} (x
+                              {item.quantity})
+                            </span>
+                            <span className="font-medium">
+                              $
+                              {(
+                                Number(item.variant.price ?? item.product.basePrice) * item.quantity
+                              ).toLocaleString("es-AR")}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
+
+                    {appliedCode && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <p className="text-sm text-green-800">
+                          Código aplicado: <strong>{appliedCode}</strong>
+                        </p>
+                      </div>
+                    )}
+
+                    {error && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <p className="text-sm text-red-800">{error}</p>
+                      </div>
+                    )}
+
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <p className="text-sm text-blue-800 mb-2">
+                        <strong>Próximo paso:</strong> Al completar el pedido, serás redirigido a MercadoPago
+                        para realizar el pago de forma segura.
+                      </p>
+                      <p className="text-xs text-blue-700">
+                        Una vez completado el pago, serás redirigido de vuelta a nuestro sitio.
+                      </p>
+                    </div>
                   </div>
+                </div>
               </div>
             )}
 

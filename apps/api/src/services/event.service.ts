@@ -4,10 +4,11 @@ import { CreateEventDto, Event, EventType } from "../../../../packages/shared/di
 const prisma = new PrismaClient();
 
 // Eventos que solo se cuentan (no se registran individualmente)
+// Solo guardamos contadores diarios para estos eventos de alto volumen
 const COUNT_ONLY_EVENTS = [
   EventType.PAGE_VIEW,
   EventType.CTA_CLICK,
-  EventType.BUY_INTENT_CLICKED, // Solo el click, el lead se registra por separado
+  EventType.BUY_INTENT_CLICKED,
 ];
 
 /**

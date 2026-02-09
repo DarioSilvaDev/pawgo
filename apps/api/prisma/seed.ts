@@ -5,6 +5,9 @@ import {
   Lead,
   Order,
   Commission,
+  OrderStatus,
+  DiscountType,
+  InfluencerPaymentStatus,
 } from "@prisma/client";
 import bcrypt from "bcrypt";
 
@@ -517,7 +520,7 @@ async function main() {
           data: {
             code: codeData.code,
             influencerId: influencer.id,
-            discountType: codeData.discountType,
+            discountType: codeData.discountType as DiscountType,
             discountValue: codeData.discountValue,
             minPurchase: codeData.minPurchase,
             maxUses: codeData.maxUses,
@@ -943,12 +946,12 @@ async function main() {
         );
         if (foundCode) {
           discountCode = foundCode;
-          if (subtotal >= (foundCode.minPurchase || 0)) {
+          if (subtotal >= Number(foundCode.minPurchase || 0)) {
             discountCodeId = foundCode.id;
             if (foundCode.discountType === "percentage") {
-              discount = (subtotal * foundCode.discountValue) / 100;
+              discount = (subtotal * Number(foundCode.discountValue)) / 100;
             } else {
-              discount = Math.min(foundCode.discountValue, subtotal);
+              discount = Math.min(Number(foundCode.discountValue), subtotal);
             }
           }
         }
@@ -973,7 +976,7 @@ async function main() {
         const order = await prisma.order.create({
           data: {
             leadId: lead.id,
-            status: orderData.status,
+            status: orderData.status as OrderStatus,
             subtotal,
             discount,
             shippingCost,
@@ -981,7 +984,7 @@ async function main() {
             currency: "ARS",
             discountCodeId,
             createdAt: orderData.createdAt,
-            items: [
+            itemsSnapshot: [
               {
                 productId: product.id,
                 variantId: variant.id,
@@ -994,7 +997,7 @@ async function main() {
                 subtotal: variant.price * orderData.quantity,
                 total: variant.price * orderData.quantity - discount,
               },
-            ] as any,
+            ],
           },
         });
         createdOrders.push(order);
@@ -1023,8 +1026,8 @@ async function main() {
               paidAt:
                 orderData.status === "delivered"
                   ? new Date(
-                      orderData.createdAt.getTime() + 2 * 24 * 60 * 60 * 1000
-                    )
+                    orderData.createdAt.getTime() + 2 * 24 * 60 * 60 * 1000
+                  )
                   : null,
             },
           });
@@ -1095,7 +1098,7 @@ async function main() {
       for (let i = 0; i < Math.min(commissionGroups.length, 3); i++) {
         const group = commissionGroups[i];
         const totalAmount = group.reduce(
-          (sum, comm) => sum + comm.commissionAmount,
+          (sum, comm) => sum + Number(comm.commissionAmount),
           0
         );
         const status = paymentStatuses[statusIndex % paymentStatuses.length];
@@ -1108,7 +1111,6 @@ async function main() {
         const payment = await prisma.influencerPayment.create({
           data: {
             influencerId,
-            commissionIds: group.map((c) => c.id),
             totalAmount,
             currency: "ARS",
             paymentMethod: influencer.paymentMethod || "transfer",
@@ -1120,9 +1122,9 @@ async function main() {
             requestedAt,
             invoiceUploadedAt:
               status === "invoice_uploaded" ||
-              status === "invoice_rejected" ||
-              status === "approved" ||
-              status === "paid"
+                status === "invoice_rejected" ||
+                status === "approved" ||
+                status === "paid"
                 ? new Date(requestedAt.getTime() + 2 * 24 * 60 * 60 * 1000)
                 : null,
             approvedAt:
@@ -1135,25 +1137,23 @@ async function main() {
                 : null,
             invoiceUrl:
               status === "invoice_uploaded" ||
-              status === "invoice_rejected" ||
-              status === "approved" ||
-              status === "paid"
-                ? `https://storage.example.com/invoices/${influencerId}-${
-                    i + 1
-                  }.pdf`
+                status === "invoice_rejected" ||
+                status === "approved" ||
+                status === "paid"
+                ? `https://storage.example.com/invoices/${influencerId}-${i + 1
+                }.pdf`
                 : null,
             paymentProofUrl:
               status === "paid"
-                ? `https://storage.example.com/payments/${influencerId}-${
-                    i + 1
-                  }.pdf`
+                ? `https://storage.example.com/payments/${influencerId}-${i + 1
+                }.pdf`
                 : null,
             contentLinks:
               status === "paid"
                 ? ([
-                    `https://instagram.com/p/example${i + 1}`,
-                    `https://tiktok.com/@example/video/${i + 1}`,
-                  ] as any)
+                  `https://instagram.com/p/example${i + 1}`,
+                  `https://tiktok.com/@example/video/${i + 1}`,
+                ] as any)
                 : null,
           },
         });
@@ -1167,10 +1167,8 @@ async function main() {
         }
 
         console.log(
-          `✅ InfluencerPayment creado: ${
-            influencer.name
-          } - ${status} - ${formatCurrency(totalAmount)} (${
-            group.length
+          `✅ InfluencerPayment creado: ${influencer.name
+          } - ${status} - ${formatCurrency(totalAmount)} (${group.length
           } comisiones)`
         );
       }
@@ -1178,12 +1176,11 @@ async function main() {
       // Informar sobre comisiones pendientes
       if (pendingCommissions.length > 0) {
         const pendingTotal = pendingCommissions.reduce(
-          (sum, comm) => sum + comm.commissionAmount,
+          (sum, comm) => sum + Number(comm.commissionAmount),
           0
         );
         console.log(
-          `ℹ️  ${pendingCommissions.length} comisiones pendientes para ${
-            influencer.name
+          `ℹ️  ${pendingCommissions.length} comisiones pendientes para ${influencer.name
           } (Total: ${formatCurrency(pendingTotal)})`
         );
       }

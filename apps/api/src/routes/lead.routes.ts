@@ -1,14 +1,14 @@
 import { FastifyInstance } from "fastify";
-import { leadController } from "../controllers/lead.controller.js";
+import { LeadController } from "../controllers/lead.controller.js";
 import { createAuthMiddleware, requireRole } from "../auth/middleware/auth.middleware.js";
 import { TokenService } from "../auth/services/token.service.js";
 import { UserRole } from "../../../../packages/shared/dist/index.js";
 
 export async function leadRoutes(
   fastify: FastifyInstance,
-  options: { tokenService: TokenService }
+  options: { tokenService: TokenService; leadController: LeadController }
 ) {
-  const { tokenService } = options;
+  const { tokenService, leadController } = options;
   const authenticate = createAuthMiddleware(tokenService);
   const requireAdmin = requireRole(UserRole.ADMIN);
 

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ConfigProvider } from '@/contexts/ConfigContext';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -74,7 +75,9 @@ export default function RootLayout({
         )}
       </head>
       <body className="antialiased">
-        <AuthProvider>{children}</AuthProvider>
+        <ConfigProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ConfigProvider>
       </body>
     </html>
   );

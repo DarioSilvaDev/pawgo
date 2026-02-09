@@ -1,411 +1,348 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { StorageService } from "../services/storage.service.js";
 import { InfluencerPaymentService } from "../services/influencer-payment.service.js";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../config/prisma.client.js";
 import { JwtPayload } from "../../../../packages/shared/dist/index.js";
 
-const prisma = new PrismaClient();
-
-export function createUploadController(
-  storageService: StorageService,
-  influencerPaymentService: InfluencerPaymentService
-) {
-  return {
-    async uploadInvoice(request: FastifyRequest, reply: FastifyReply) {
-      try {
-        const user = request.authUser as JwtPayload | undefined;
-        if (!user) {
-          reply.status(401).send({ error: "No autenticado" });
-          return;
-        }
-
-        const { id } = request.params as { id: string };
-
-        // Verify payment exists and belongs to user
-        const payment = await prisma.influencerPayment.findUnique({
-          where: { id },
-        });
-
-        if (!payment) {
-          reply.status(404).send({ error: "Pago no encontrado" });
-          return;
-        }
-
-        // Verify permissions
-        if (
-          user.role === "influencer" &&
-          payment.influencerId !== user.entityId
-        ) {
-          reply
-            .status(403)
-            .send({ error: "No tienes permiso para modificar este pago" });
-          return;
-        }
-
-        // Verify status allows invoice upload
-        if (
-          payment.status !== "pending" &&
-          payment.status !== "invoice_rejected"
-        ) {
-          reply.status(400).send({
-            error:
-              "Solo se pueden subir facturas cuando el pago está pendiente o rechazado",
-          });
-          return;
-        }
-
-        const data = await request.file();
-
-        if (!data) {
-          reply.status(400).send({ error: "No se recibió ningún archivo" });
-          return;
-        }
-
-        // Read file buffer
-        const buffer = await data.toBuffer();
-
-        // Upload file
-        const result = await storageService.uploadInvoice(
-          buffer,
-          user.authId,
-          data.filename,
-          data.mimetype
-        );
-
-        // Update payment with invoice URL
-        await influencerPaymentService.update(
-          id,
-          { invoiceUrl: result.url },
-          user.entityId,
-          user.role,
-          user.authId
-        );
-
-        reply.send({
-          success: true,
-          url: result.url,
-          filename: result.filename,
-        });
-      } catch (error) {
-        if (error instanceof Error) {
-          reply.status(400).send({ error: error.message });
-          return;
-        }
-        throw error;
-      }
-    },
-
-    async uploadPaymentProof(request: FastifyRequest, reply: FastifyReply) {
-      try {
-        const user = request.authUser as JwtPayload | undefined;
-        if (!user || user.role !== "admin") {
-          reply.status(403).send({
-            error: "Solo los administradores pueden subir comprobantes",
-          });
-          return;
-        }
-
-        const { id } = request.params as { id: string };
-
-        // Verify payment exists
-        const payment = await prisma.influencerPayment.findUnique({
-          where: { id },
-        });
-
-        if (!payment) {
-          reply.status(404).send({ error: "Pago no encontrado" });
-          return;
-        }
-
-        const data = await request.file();
-
-        if (!data) {
-          reply.status(400).send({ error: "No se recibió ningún archivo" });
-          return;
-        }
-
-        // Read file buffer
-        const buffer = await data.toBuffer();
-
-        // Upload file
-        const result = await storageService.uploadPaymentProof(
-          buffer,
-          user.authId,
-          data.filename,
-          data.mimetype
-        );
-
-        // Update payment with proof URL
-        await influencerPaymentService.update(
-          id,
-          { paymentProofUrl: result.url },
-          user.entityId,
-          user.role,
-          user.authId
-        );
-
-        reply.send({
-          success: true,
-          url: result.url,
-          filename: result.filename,
-        });
-      } catch (error) {
-        if (error instanceof Error) {
-          reply.status(400).send({ error: error.message });
-          return;
-        }
-        throw error;
-      }
-    },
-
-    async uploadContent(request: FastifyRequest, reply: FastifyReply) {
-      try {
-        const user = request.authUser as JwtPayload | undefined;
-        if (!user) {
-          reply.status(401).send({ error: "No autenticado" });
-          return;
-        }
-
-        const { id } = request.params as { id: string };
-
-        // Verify payment exists and belongs to user
-        const payment = await prisma.influencerPayment.findUnique({
-          where: { id },
-        });
-
-        if (!payment) {
-          reply.status(404).send({ error: "Pago no encontrado" });
-          return;
-        }
-
-        // Verify permissions
-        if (
-          user.role === "influencer" &&
-          payment.influencerId !== user.entityId
-        ) {
-          reply
-            .status(403)
-            .send({ error: "No tienes permiso para modificar este pago" });
-          return;
-        }
-
-        // Verify status allows content upload
-        if (payment.status !== "approved" && payment.status !== "paid") {
-          reply.status(400).send({
-            error:
-              "Solo se pueden subir contenidos cuando el pago está aprobado o pagado",
-          });
-          return;
-        }
-
-        const data = await request.file();
-
-        if (!data) {
-          reply.status(400).send({ error: "No se recibió ningún archivo" });
-          return;
-        }
-
-        // Read file buffer
-        const buffer = await data.toBuffer();
-
-        // Upload file
-        const result = await storageService.uploadContent(
-          buffer,
-          data.filename,
-          user.authId,
-          data.mimetype
-        );
-
-        // Get current content links
-        const currentPayment = await influencerPaymentService.getById(id);
-        const currentLinks = currentPayment?.contentLinks || [];
-
-        // Add new link
-        const newLinks = [...currentLinks, result.url];
-
-        // Update payment with new content link
-        await influencerPaymentService.update(
-          id,
-          { contentLinks: newLinks },
-          user.entityId,
-          user.role,
-          user.authId
-        );
-
-        reply.send({
-          success: true,
-          url: result.url,
-          filename: result.filename,
-          links: newLinks,
-        });
-      } catch (error) {
-        if (error instanceof Error) {
-          reply.status(400).send({ error: error.message });
-          return;
-        }
-        throw error;
-      }
-    },
-
-    async uploadProductImage(request: FastifyRequest, reply: FastifyReply) {
-      console.log("\n" + "=".repeat(60));
-      console.log("🖼️ [uploadProductImage] Nueva request recibida");
-      console.log("=".repeat(60));
-
-      try {
-        const user = request.authUser as JwtPayload | undefined;
-        console.log("👤 [uploadProductImage] Usuario:", user ? `${user.email} (${user.role})` : "undefined");
-
-        if (!user || user.role !== "admin") {
-          console.error("❌ [uploadProductImage] Acceso denegado - no es admin");
-          reply.status(403).send({
-            error: "Solo los administradores pueden subir imágenes de productos",
-          });
-          return;
-        }
-        console.log("✅ [uploadProductImage] Usuario autenticado y autorizado");
-
-        // Extract productId from multipart form data
-        console.log("🔍 [uploadProductImage] Extrayendo datos del multipart...");
-        let productId: string | undefined;
-        let fileData: Awaited<ReturnType<typeof request.file>> | null = null;
-
-        // Iterate through parts to find both file and productId
-        console.log("🔄 [uploadProductImage] Iterando sobre partes del multipart...");
-        const parts = request.parts();
-        let partCount = 0;
-
-        try {
-          for await (const part of parts) {
-            partCount++;
-            const partFieldname = 'fieldname' in part ? (part as { fieldname: string }).fieldname : 'N/A';
-            console.log(`  📦 Parte ${partCount}: tipo=${part.type}, fieldname=${partFieldname}`);
-
-            if (part.type === "file") {
-              fileData = part;
-              console.log("  ✅ Archivo encontrado:");
-              console.log("    - Filename:", fileData.filename);
-              console.log("    - MIME type:", fileData.mimetype);
-              console.log("    - Encoding:", fileData.encoding);
-            } else if (part.type === "field") {
-              const fieldPart = part as { fieldname: string; value: string };
-              console.log(`  📝 Campo encontrado: ${fieldPart.fieldname} = ${fieldPart.value}`);
-              if (fieldPart.fieldname === "productId") {
-                productId = fieldPart.value;
-                console.log("  ✅ productId encontrado:", productId);
-              }
-            }
-          }
-          console.log(`✅ [uploadProductImage] Iteración completada. Total de partes: ${partCount}`);
-        } catch (error) {
-          console.error("❌ [uploadProductImage] Error al iterar sobre partes:");
-          console.error("  - Tipo:", error instanceof Error ? error.constructor.name : typeof error);
-          console.error("  - Mensaje:", error instanceof Error ? error.message : String(error));
-          if (error instanceof Error && error.stack) {
-            console.error("  - Stack:", error.stack);
-          }
-          throw error;
-        }
-
-        console.log(`📊 [uploadProductImage] Resumen de extracción:`);
-        console.log(`  - Total de partes procesadas: ${partCount}`);
-        console.log(`  - Archivo encontrado: ${fileData ? 'Sí' : 'No'}`);
-        console.log(`  - ProductId encontrado: ${productId ? `Sí (${productId})` : 'No'}`);
-
-        if (!fileData) {
-          console.error("❌ [uploadProductImage] No se encontró archivo en la request");
-          reply.status(400).send({ error: "No se recibió ningún archivo" });
-          return;
-        }
-
-        // Read file buffer
-        console.log("📖 [uploadProductImage] Leyendo buffer del archivo...");
-        console.log("  - Filename:", fileData.filename);
-        console.log("  - MIME type:", fileData.mimetype);
-        console.log("  - Encoding:", fileData.encoding);
-
-        const bufferStartTime = Date.now();
-        let buffer: Buffer;
-        try {
-          buffer = await fileData.toBuffer();
-          const bufferTime = Date.now() - bufferStartTime;
-          console.log(`✅ [uploadProductImage] Buffer leído en ${bufferTime}ms (${(buffer.length / 1024 / 1024).toFixed(2)} MB)`);
-        } catch (bufferError) {
-          console.error("❌ [uploadProductImage] Error al leer buffer:");
-          console.error("  - Tipo:", bufferError instanceof Error ? bufferError.constructor.name : typeof bufferError);
-          console.error("  - Mensaje:", bufferError instanceof Error ? bufferError.message : String(bufferError));
-          if (bufferError instanceof Error && bufferError.stack) {
-            console.error("  - Stack:", bufferError.stack);
-          }
-          throw bufferError;
-        }
-
-        // Upload file
-        console.log("☁️ [uploadProductImage] Subiendo archivo a Backblaze B2...");
-        const uploadStartTime = Date.now();
-        const result = await storageService.uploadProductImage(
-          buffer,
-          user.authId,
-          fileData.filename,
-          fileData.mimetype
-        );
-        const uploadTime = Date.now() - uploadStartTime;
-        console.log(`✅ [uploadProductImage] Archivo subido a B2 en ${uploadTime}ms`);
-        console.log("  - URL:", result.url);
-        console.log("  - Path:", result.path);
-        console.log("  - Filename:", result.filename);
-
-        // If productId is provided, update the product with the new image
-        if (productId) {
-          console.log("🔄 [uploadProductImage] Actualizando producto en base de datos...");
-          console.log("  - ProductId:", productId);
-
-          const product = await prisma.product.findUnique({
-            where: { id: productId },
-          });
-
-          if (product) {
-            console.log("  ✅ Producto encontrado:", product.name);
-            console.log("  📋 Imágenes actuales:", product.images?.length || 0);
-
-            await prisma.product.update({
-              where: { id: product.id },
-              data: { images: [...(product.images || []), result.url] },
-            });
-
-            console.log("  ✅ Producto actualizado con nueva imagen");
-            console.log("  📋 Total de imágenes ahora:", (product.images?.length || 0) + 1);
-          } else {
-            console.warn("  ⚠️ Producto no encontrado con ID:", productId);
-          }
-        } else {
-          console.log("ℹ️ [uploadProductImage] No se proporcionó productId - solo retornando URL");
-        }
-
-        console.log("✅ [uploadProductImage] Request completada exitosamente");
-        console.log("=".repeat(60) + "\n");
-
-        reply.send({
-          success: true,
-          url: result.url,
-          filename: result.filename,
-        });
-
-      } catch (error) {
-        console.error("❌ [uploadProductImage] Error en el proceso:");
-        console.error("  - Tipo:", error instanceof Error ? error.constructor.name : typeof error);
-        console.error("  - Mensaje:", error instanceof Error ? error.message : String(error));
-        if (error instanceof Error && error.stack) {
-          console.error("  - Stack:", error.stack);
-        }
-        console.log("=".repeat(60) + "\n");
-
-        if (error instanceof Error) {
-          reply.status(400).send({ error: error.message });
-          return;
-        }
-        throw error;
-      }
-    },
-  };
+/**
+ * Datos extraídos de un archivo multipart
+ */
+interface FileData {
+  buffer: Buffer;
+  filename: string;
+  mimetype: string;
 }
+
+/**
+ * UploadController - Controlador para carga de archivos
+ *
+ * Responsabilidades:
+ * - Manejar requests multipart de Fastify
+ * - Validar permisos de acceso (RBAC)
+ * - Coordinar con StorageService para la carga
+ * - Aplicar lógica de negocio post-carga (actualizar DB)
+ */
+export class UploadController {
+  private storageService: StorageService;
+  private influencerPaymentService: InfluencerPaymentService;
+
+  constructor(
+    storageService: StorageService,
+    influencerPaymentService: InfluencerPaymentService
+  ) {
+    this.storageService = storageService;
+    this.influencerPaymentService = influencerPaymentService;
+  }
+
+  /**
+   * Valida que el usuario esté autenticado
+   */
+  private validateAuth(request: FastifyRequest, reply: FastifyReply): JwtPayload | null {
+    const user = request.authUser as JwtPayload | undefined;
+    if (!user) {
+      reply.status(401).send({ error: "No autenticado" });
+      return null;
+    }
+    return user;
+  }
+
+  /**
+   * Extrae el archivo de una request multipart
+   */
+  private async extractFile(request: FastifyRequest): Promise<FileData | null> {
+    const data = await request.file();
+    if (!data) {
+      return null;
+    }
+
+    return {
+      buffer: await data.toBuffer(),
+      filename: data.filename,
+      mimetype: data.mimetype,
+    };
+  }
+
+  /**
+   * Valida que un influencer tenga acceso a un pago específico
+   */
+  private async validatePaymentOwnership(
+    paymentId: string,
+    user: JwtPayload,
+    reply: FastifyReply
+  ): Promise<any | null> {
+    const payment = await prisma.influencerPayment.findUnique({
+      where: { id: paymentId },
+    });
+
+    if (!payment) {
+      reply.status(404).send({ error: "Pago no encontrado" });
+      return null;
+    }
+
+    // Admin puede acceder a cualquier pago
+    if (user.role === "admin") {
+      return payment;
+    }
+
+    // Influencer solo puede acceder a sus propios pagos
+    if (user.role === "influencer" && payment.influencerId !== user.entityId) {
+      reply.status(403).send({ error: "No tienes permiso para modificar este pago" });
+      return null;
+    }
+
+    return payment;
+  }
+
+  /**
+   * Subir factura (influencer o admin)
+   * POST /api/influencer-payments/:id/upload-invoice
+   */
+  uploadInvoice = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const user = this.validateAuth(request, reply);
+      if (!user) return;
+
+      const { id } = request.params as { id: string };
+
+      const payment = await this.validatePaymentOwnership(id, user, reply);
+      if (!payment) return;
+
+      // Verificar que el estado permite subir factura
+      if (payment.status !== "pending" && payment.status !== "invoice_rejected") {
+        reply.status(400).send({
+          error: "Solo se pueden subir facturas cuando el pago está pendiente o rechazado",
+        });
+        return;
+      }
+
+      const fileData = await this.extractFile(request);
+      if (!fileData) {
+        reply.status(400).send({ error: "No se recibió ningún archivo" });
+        return;
+      }
+
+      // Subir archivo usando el método genérico
+      const result = await this.storageService.upload({
+        buffer: fileData.buffer,
+        originalName: fileData.filename,
+        mimeType: fileData.mimetype,
+        authId: user.authId,
+        documentType: "INVOICES",
+      });
+
+      // Lógica de negocio: actualizar el pago con la URL de la factura
+      await this.influencerPaymentService.update(
+        id,
+        { invoiceUrl: result.key },
+        user.entityId,
+        user.role,
+        user.authId
+      );
+
+      reply.send({
+        success: true,
+        key: result.key,
+        filename: result.filename,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        reply.status(400).send({ error: error.message });
+      } else {
+        throw error;
+      }
+    }
+  };
+
+  /**
+   * Subir comprobante de pago (solo admin)
+   * POST /api/influencer-payments/:id/upload-payment-proof
+   */
+  uploadPaymentProof = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const user = this.validateAuth(request, reply);
+      if (!user) return;
+
+      const { id } = request.params as { id: string };
+
+      const payment = await this.validatePaymentOwnership(id, user, reply);
+      if (!payment) return;
+
+      const fileData = await this.extractFile(request);
+      if (!fileData) {
+        reply.status(400).send({ error: "No se recibió ningún archivo" });
+        return;
+      }
+
+      // Subir archivo
+      const result = await this.storageService.upload({
+        buffer: fileData.buffer,
+        originalName: fileData.filename,
+        mimeType: fileData.mimetype,
+        authId: user.authId,
+        documentType: "PAYMENT_PROOFS",
+      });
+
+      // Lógica de negocio: actualizar el pago con la URL del comprobante
+      await this.influencerPaymentService.update(
+        id,
+        { paymentProofUrl: result.key },
+        user.entityId,
+        user.role,
+        user.authId
+      );
+
+      reply.send({
+        success: true,
+        key: result.key,
+        filename: result.filename,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        reply.status(400).send({ error: error.message });
+      } else {
+        throw error;
+      }
+    }
+  };
+
+  /**
+   * Subir contenido multimedia (influencer o admin)
+   * POST /api/influencer-payments/:id/upload-content
+   */
+  uploadContent = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const user = this.validateAuth(request, reply);
+      if (!user) return;
+
+      const { id } = request.params as { id: string };
+
+      const payment = await this.validatePaymentOwnership(id, user, reply);
+      if (!payment) return;
+
+      // Verificar que el estado permite subir contenido
+      if (payment.status !== "approved" && payment.status !== "paid") {
+        reply.status(400).send({
+          error: "Solo se pueden subir contenidos cuando el pago está aprobado o pagado",
+        });
+        return;
+      }
+
+      const fileData = await this.extractFile(request);
+      if (!fileData) {
+        reply.status(400).send({ error: "No se recibió ningún archivo" });
+        return;
+      }
+
+      // Subir archivo
+      const result = await this.storageService.upload({
+        buffer: fileData.buffer,
+        originalName: fileData.filename,
+        mimeType: fileData.mimetype,
+        authId: user.authId,
+        documentType: "CONTENT",
+      });
+
+      // Lógica de negocio: agregar el link al array de contenidos
+      const currentPayment = await this.influencerPaymentService.getById(id);
+      const currentLinks = currentPayment?.contentLinks || [];
+      const newLinks = [...currentLinks, result.key];
+
+      await this.influencerPaymentService.update(
+        id,
+        { contentLinks: newLinks },
+        user.entityId,
+        user.role,
+        user.authId
+      );
+
+      reply.send({
+        success: true,
+        key: result.key,
+        filename: result.filename,
+        links: newLinks,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        reply.status(400).send({ error: error.message });
+      } else {
+        throw error;
+      }
+    }
+  };
+
+  /**
+   * Subir imagen de producto (solo admin)
+   * POST /api/upload/product-image
+   */
+  uploadProductImage = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const user = this.validateAuth(request, reply)
+      if (!user) return;
+
+      const { productId } = request.query as { productId: string };
+
+      const fileData = await this.extractFile(request);
+      if (!fileData) {
+        reply.status(400).send({ error: "No se recibió ningún archivo" });
+        return;
+      }
+
+      // Subir archivo
+      const result = await this.storageService.upload({
+        buffer: fileData.buffer,
+        originalName: fileData.filename,
+        mimeType: fileData.mimetype,
+        authId: user.authId,
+        documentType: "PRODUCTS",
+      });
+
+      // Lógica de negocio: si se proporciona productId, actualizar el producto
+      console.log("🚀 ~ UploadController ~ productId:", productId)
+      if (productId) {
+        const product = await prisma.product.findUnique({
+          where: { id: productId },
+        });
+
+        if (product) {
+          await prisma.product.update({
+            where: { id: product.id },
+            data: { images: [...(product.images || []), result.key] },
+          });
+        }
+      }
+
+      reply.send({
+        success: true,
+        key: result.key,
+        filename: result.filename,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        reply.status(400).send({ error: error.message });
+      } else {
+        throw error;
+      }
+    }
+  };
+
+  /**
+   * Descargar archivo
+   * GET /api/upload/download?key=key
+   */
+  download = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { key } = request.query as { key: string };
+
+      const url = await this.storageService.getSignedUrl(key);
+
+      reply.send({ url });
+    } catch (error) {
+      if (error instanceof Error) {
+        reply.status(400).send({ error: error.message });
+      } else {
+        throw error;
+      }
+    }
+  }
+}
+

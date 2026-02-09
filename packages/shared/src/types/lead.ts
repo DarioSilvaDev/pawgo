@@ -13,5 +13,6 @@ export interface CreateLeadDto {
   email: string;
   name?: string;
   dogSize?: DogSize;
+  incentive?: string;
 }
 

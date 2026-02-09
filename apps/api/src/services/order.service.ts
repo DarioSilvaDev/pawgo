@@ -9,7 +9,7 @@ import {
   getEffectivePrice,
 } from "../utils/decimal.js";
 
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma.client.js";
 
 export class OrderService {
   private discountCodeService: DiscountCodeService;
@@ -131,14 +131,8 @@ export class OrderService {
       }
     }
 
-    // Calculate shipping cost based on zip code
-    // 2900 = free shipping, others = 0 for now (próximamente)
-    let shippingCost = prismaDecimal(0);
-    if (data.shippingAddress?.zipCode === "2900") {
-      shippingCost = prismaDecimal(0); // Free shipping for San Nicolas de los Arroyos
-    } else if (data.shippingAddress?.zipCode) {
-      shippingCost = prismaDecimal(0); // Por ahora 0 para otros códigos (próximamente)
-    }
+    // Free shipping
+    const shippingCost = prismaDecimal(0);
 
     // Create order
     const order = await prisma.order.create({

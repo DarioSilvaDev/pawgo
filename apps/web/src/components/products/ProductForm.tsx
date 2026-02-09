@@ -11,6 +11,7 @@ import {
   type Product,
   type CreateProductDto,
   type UpdateProductDto,
+  downloadImage,
 } from "@/lib/product";
 import { useToast } from "@/components/ui/useToast";
 
@@ -145,7 +146,7 @@ export function ProductForm({ productId }: ProductFormProps) {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, productId: string) => {
     console.log("🖼️ [ProductForm] Iniciando carga de imágenes");
     console.log("📦 [ProductForm] productId:", productId || "undefined (producto nuevo)");
-    
+
     const files = e.target.files;
     if (!files || files.length === 0) {
       console.warn("⚠️ [ProductForm] No se seleccionaron archivos");
@@ -153,7 +154,7 @@ export function ProductForm({ productId }: ProductFormProps) {
     }
 
     console.log(`📁 [ProductForm] Archivos seleccionados: ${files.length}`);
-    
+
     const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
     const maxSize = 10 * 1024 * 1024; // 10MB
 
@@ -195,27 +196,31 @@ export function ProductForm({ productId }: ProductFormProps) {
         // Subir imagen (pasar productId solo si existe, para productos nuevos será undefined)
         console.log("🚀 [ProductForm] Iniciando subida al servidor...");
         const startTime = Date.now();
-        
-        const result = await uploadProductImage(file, productId || undefined);
-        
-        const uploadTime = Date.now() - startTime;
-        console.log(`✅ [ProductForm] Imagen subida exitosamente en ${uploadTime}ms`);
-        console.log("  - URL:", result.url);
-        console.log("  - Filename:", result.filename);
 
-        // Agregar URL a la lista de imágenes si no existe
-        if (!formData.images.includes(result.url)) {
-          console.log("➕ [ProductForm] Agregando URL a la lista de imágenes");
-          setFormData({
-            ...formData,
-            images: [...formData.images, result.url],
-          });
-          console.log(`📋 [ProductForm] Total de imágenes: ${formData.images.length + 1}`);
-        } else {
-          console.log("⚠️ [ProductForm] La URL ya existe en la lista, no se agrega");
+        const result = await uploadProductImage(file, productId || undefined);
+        console.log("🚀 ~ handleImageUpload ~ result:", result)
+        if (result.success) {
+          const url = await downloadImage(result.key)
+          console.log("🚀 ~ handleImageUpload ~ url:", url)
+          const uploadTime = Date.now() - startTime;
+          console.log(`✅ [ProductForm] Imagen subida exitosamente en ${uploadTime}ms`);
+          console.log("  - URL:", url);
+          console.log("  - Filename:", result.filename);
+
+          // Agregar URL a la lista de imágenes si no existe
+          if (!formData.images.includes(url)) {
+            console.log("➕ [ProductForm] Agregando URL a la lista de imágenes");
+            setFormData({
+              ...formData,
+              images: [...formData.images, url],
+            });
+            console.log(`📋 [ProductForm] Total de imágenes: ${formData.images.length + 1}`);
+          } else {
+            console.log("⚠️ [ProductForm] La URL ya existe en la lista, no se agrega");
+          }
         }
       }
-      
+
       console.log("✅ [ProductForm] Proceso de carga completado");
     } catch (err) {
       console.error("❌ [ProductForm] Error al subir imagen:", err);
@@ -365,11 +370,10 @@ export function ProductForm({ productId }: ProductFormProps) {
             <div className="mb-2">
               <label
                 htmlFor="image-upload"
-                className={`inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg cursor-pointer transition-colors ${
-                  uploadingImages
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                    : "bg-white text-gray-700 hover:bg-gray-50"
-                }`}
+                className={`inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg cursor-pointer transition-colors ${uploadingImages
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
               >
                 <svg
                   className="w-5 h-5 mr-2"
@@ -460,8 +464,8 @@ export function ProductForm({ productId }: ProductFormProps) {
               {saving
                 ? "Guardando..."
                 : productId
-                ? "Actualizar"
-                : "Crear Producto"}
+                  ? "Actualizar"
+                  : "Crear Producto"}
             </button>
           </div>
         </form>

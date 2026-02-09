@@ -1,9 +1,10 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import { CreateLeadDto, Lead, DogSize } from '../../../../packages/shared/dist/index.js';
+import { CreateLeadDto, Lead, DogSize, EventType } from '../../../../packages/shared/dist/index.js';
 
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma.client.js";
+import { eventService } from './event.service.js';
 
-export const leadService = {
+export class LeadService {
   async create(data: CreateLeadDto): Promise<Lead> {
     const lead = await prisma.lead.create({
       data: {
@@ -13,6 +14,23 @@ export const leadService = {
       },
     });
 
+    // Emitir evento de lead enviado automáticamente
+    try {
+      await eventService.create({
+        type: EventType.LEAD_SUBMITTED,
+        metadata: {
+          leadId: lead.id,
+          email: lead.email,
+          hasName: !!lead.name,
+          hasDogSize: !!lead.dogSize,
+          incentive: data.incentive || 'unknown',
+        },
+      });
+    } catch (error) {
+      // Log error but don't fail lead creation
+      console.error('Failed to track LEAD_SUBMITTED event:', error);
+    }
+
     return {
       id: lead.id,
       email: lead.email,
@@ -21,7 +39,7 @@ export const leadService = {
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt,
     };
-  },
+  }
 
   async getAll(filters?: {
     search?: string;
@@ -65,7 +83,7 @@ export const leadService = {
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt,
     }));
-  },
+  }
 
   async getById(id: string): Promise<Lead | null> {
     const lead = await prisma.lead.findUnique({
@@ -84,12 +102,12 @@ export const leadService = {
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt,
     };
-  },
+  }
 
   async delete(id: string): Promise<void> {
     await prisma.lead.delete({
       where: { id },
     });
-  },
-};
+  }
+}
 

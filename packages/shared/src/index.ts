@@ -7,6 +7,7 @@ export * from './types/payment';
 export * from './types/auth';
 export * from './types/discount-code';
 export * from './types/influencer-payment';
+export * from './types/config.types';
 
 // Enums
 export * from './enums/dog-size';

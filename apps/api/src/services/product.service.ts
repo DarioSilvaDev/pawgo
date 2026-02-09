@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma } from "@prisma/client";
+import { StorageService } from "./storage.service.js";
 
 const prisma = new PrismaClient();
 
@@ -45,6 +46,8 @@ export class ProductService {
   /**
    * Get all products
    */
+  constructor(private readonly storageService: StorageService) { }
+
   async getAll(filters?: { isActive?: boolean; search?: string }) {
     const where: Prisma.ProductWhereInput = {};
 
@@ -58,8 +61,7 @@ export class ProductService {
         { description: { contains: filters.search, mode: "insensitive" } },
       ];
     }
-
-    return prisma.product.findMany({
+    const products = await prisma.product.findMany({
       where,
       include: {
         variants: {
@@ -68,6 +70,17 @@ export class ProductService {
       },
       orderBy: { createdAt: "desc" },
     });
+
+    return Promise.all(products.map(async (product) => {
+      return {
+        ...product,
+        images: product.images.length > 0
+          ? await Promise.all(product.images.map((key) =>
+            this.storageService.getSignedUrl(key)
+          ))
+          : [],
+      };
+    }));
   }
 
   /**
@@ -128,16 +141,16 @@ export class ProductService {
         isActive: data.isActive !== undefined ? data.isActive : true,
         variants: data.variants
           ? {
-              create: data.variants.map((variant) => ({
-                name: variant.name,
-                size: variant.size,
-                price: variant.price,
-                stock: variant.stock,
-                sku: variant.sku,
-                isActive:
-                  variant.isActive !== undefined ? variant.isActive : true,
-              })),
-            }
+            create: data.variants.map((variant) => ({
+              name: variant.name,
+              size: variant.size,
+              price: variant.price,
+              stock: variant.stock,
+              sku: variant.sku,
+              isActive:
+                variant.isActive !== undefined ? variant.isActive : true,
+            })),
+          }
           : undefined,
       },
       include: {

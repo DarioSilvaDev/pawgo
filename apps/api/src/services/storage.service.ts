@@ -2,286 +2,253 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } fro
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { envs } from "../config/envs.js";
 
-// Backblaze B2 Configuration (S3-compatible API)
-const B2_APPLICATION_KEY_ID = envs.B2_APPLICATION_KEY_ID;
-const B2_APP_KEY = envs.B2_APPLICATION_KEY || envs.B2_APP_KEY;
-const B2_BUCKET_NAME = envs.B2_BUCKET_NAME;
-const B2_ENDPOINT_RAW = envs.B2_ENDPOINT || "https://s3.us-west-000.backblazeb2.com";
-const B2_REGION = envs.B2_REGION || "us-west-000";
-const B2_PUBLIC_URL_RAW = envs.B2_PUBLIC_URL || (envs.B2_ENDPOINT ? envs.B2_ENDPOINT.replace("s3.", "") : "");
+/**
+ * Tipos de documento soportados por el sistema
+ */
+export type DocumentType = "INVOICES" | "PAYMENT_PROOFS" | "CONTENT" | "PRODUCTS";
 
-// Normalize endpoints - remove protocol if present for S3 client
-const B2_ENDPOINT = B2_ENDPOINT_RAW.replace(/^https?:\/\//, "");
-const B2_PUBLIC_URL = B2_PUBLIC_URL_RAW.replace(/^https?:\/\//, "");
+/**
+ * Configuración para cada tipo de documento
+ */
+interface DocumentTypeConfig {
+  folder: string;
+  allowedMimeTypes: string[];
+  maxFileSize: number; // en bytes
+  description: string;
+}
 
-// Tipos de archivos permitidos
-const ALLOWED_MIME_TYPES = {
-  facturas: ["application/pdf", "image/jpeg", "image/png", "image/jpg"],
-  comprobantes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"],
-  contenido: ["image/jpeg", "image/png", "image/jpg", "image/gif"],
-  productos: ["image/png", "image/jpeg", "image/jpg", "image/webp"],
+/**
+ * Mapa centralizado de configuración de tipos de documento.
+ * Esto permite agregar o modificar tipos sin cambiar la lógica del servicio.
+ */
+const DOCUMENT_TYPE_CONFIG: Record<DocumentType, DocumentTypeConfig> = {
+  INVOICES: {
+    folder: "facturas",
+    allowedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"],
+    maxFileSize: 10 * 1024 * 1024, // 10MB
+    description: "facturas",
+  },
+  PAYMENT_PROOFS: {
+    folder: "comprobantes",
+    allowedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"],
+    maxFileSize: 10 * 1024 * 1024, // 10MB
+    description: "comprobantes de pago",
+  },
+  CONTENT: {
+    folder: "contenido",
+    allowedMimeTypes: ["image/jpeg", "image/png", "image/jpg", "image/gif", "image/webp"],
+    maxFileSize: 15 * 1024 * 1024, // 15MB para contenido de influencers
+    description: "contenido multimedia",
+  },
+  PRODUCTS: {
+    folder: "productos",
+    allowedMimeTypes: ["image/png", "image/jpeg", "image/jpg", "image/webp"],
+    maxFileSize: 5 * 1024 * 1024, // 5MB para imágenes de productos
+    description: "imágenes de productos",
+  },
 };
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-
+/**
+ * Resultado de una carga de archivo exitosa
+ */
 export interface UploadResult {
   filename: string;
-  url: string;
-  path: string;
+  key: string;
   size: number;
   mimeType: string;
 }
 
-// Initialize S3 Client for Backblaze B2
-// Note: endpoint should be a full URL with protocol
-// We normalize it to ensure it's correct
-let normalizedEndpoint = B2_ENDPOINT || "";
-if (normalizedEndpoint && !normalizedEndpoint.startsWith("http://") && !normalizedEndpoint.startsWith("https://")) {
-  normalizedEndpoint = `https://${normalizedEndpoint}`;
-} else if (!normalizedEndpoint) {
-  normalizedEndpoint = "https://s3.us-west-000.backblazeb2.com";
+/**
+ * Parámetros para la carga genérica de archivos
+ */
+export interface UploadParams {
+  buffer: Buffer;
+  originalName: string;
+  mimeType: string;
+  authId: string;
+  documentType: DocumentType;
 }
 
-// Log credentials status (without exposing full values)
-console.log("🔐 [StorageService] Configurando credenciales B2:");
-console.log("  - B2_APPLICATION_KEY_ID:", B2_APPLICATION_KEY_ID ? `${B2_APPLICATION_KEY_ID.substring(0, 8)}...` : "NO CONFIGURADO");
-console.log("  - B2_APP_KEY:", B2_APP_KEY ? `${B2_APP_KEY.substring(0, 8)}...` : "NO CONFIGURADO");
-console.log("  - B2_BUCKET_NAME:", B2_BUCKET_NAME || "NO CONFIGURADO");
-console.log("  - B2_ENDPOINT:", normalizedEndpoint);
-console.log("  - B2_REGION:", B2_REGION);
-
-const s3Client = new S3Client({
-  endpoint: normalizedEndpoint,
-  region: B2_REGION,
-  credentials: {
-    accessKeyId: B2_APPLICATION_KEY_ID || "",
-    secretAccessKey: B2_APP_KEY || "",
-  },
-  forcePathStyle: true, // Required for Backblaze B2
-});
-
+/**
+ * StorageService - Servicio genérico de almacenamiento en Backblaze B2
+ *
+ * Responsabilidades:
+ * - Validar archivos según configuración de tipo de documento
+ * - Subir archivos a B2
+ * - Generar URLs firmadas para acceso privado
+ * - Eliminar archivos
+ *
+ * Este servicio NO contiene lógica de negocio ni dependencias de base de datos.
+ * La lógica de actualización de entidades debe manejarse en los controladores.
+ */
 export class StorageService {
+  private s3: S3Client;
+  private bucket = envs.B2_BUCKET;
+  private endpoint = `https://${envs.B2_ENDPOINT}`;
+
+  constructor() {
+    console.log("🔐 [StorageService] Configurando cliente S3 para B2...");
+
+    this.s3 = new S3Client({
+      region: envs.B2_REGION,
+      endpoint: this.endpoint,
+      credentials: {
+        accessKeyId: envs.B2_KEY_ID,
+        secretAccessKey: envs.B2_APP_KEY,
+      },
+      // forcePathStyle: true, // Requerido para compatibilidad con B2
+    });
+  }
+
   /**
-   * Initialize storage service
-   * Verifies connection to Backblaze B2
+   * Inicializa el servicio y verifica la conexión
    */
-  async initialize() {
+  async initialize(): Promise<void> {
     try {
-      if (!B2_APPLICATION_KEY_ID || !B2_APP_KEY || !B2_BUCKET_NAME) {
-        console.warn(
-          "⚠️ Backblaze B2 credentials not configured. File uploads will fail."
-        );
+      if (!envs.B2_KEY_ID || !envs.B2_APP_KEY || !envs.B2_BUCKET) {
+        console.warn("⚠️ [StorageService] Credenciales B2 no configuradas. Las cargas de archivos fallarán.");
         return;
       }
-      // Validate endpoint is a valid Backblaze B2 endpoint
-      if (!B2_ENDPOINT.includes("backblazeb2.com") && !B2_ENDPOINT.includes("backblaze.com")) {
-        console.warn(
-          `⚠️ B2_ENDPOINT (${B2_ENDPOINT}) doesn't look like a valid Backblaze B2 endpoint. Expected format: s3.REGION.backblazeb2.com`
-        );
-      }
 
-      console.log(`✅ Backblaze B2 storage initialized (endpoint: ${normalizedEndpoint})`);
+      console.log(`🔌 [StorageService] Conexión configurada a ${this.endpoint}`);
+      console.log(`✅ [StorageService] Backblaze B2 inicializado (Región: ${envs.B2_REGION})`);
     } catch (error) {
-      console.error("Error initializing Backblaze B2 storage:", error);
-      // Don't throw, allow server to start even if B2 is misconfigured
-      console.warn("⚠️ Continuing without Backblaze B2 storage. File uploads will fail.");
+      console.error("❌ [StorageService] Error al inicializar B2:", error);
+      console.warn("⚠️ [StorageService] Continuando sin almacenamiento B2.");
     }
   }
 
   /**
-   * Generate unique filename
+   * Obtiene la configuración para un tipo de documento
    */
-  private generateFilename(authId: string, originalName: string, subfolder: string): string {
-    const ext = originalName.substring(originalName.lastIndexOf("."));
-    const name = originalName.substring(0, originalName.lastIndexOf(".")).replace(/[^a-zA-Z0-9]/g, "-");
-    const timestamp = Date.now().toString();
-    return `${subfolder}/${name}-${authId}-${timestamp}.${ext}`;
+  getDocumentTypeConfig(type: DocumentType): DocumentTypeConfig {
+    const config = DOCUMENT_TYPE_CONFIG[type];
+    if (!config) {
+      throw new Error(`Tipo de documento no soportado: ${type}`);
+    }
+    return config;
   }
 
   /**
-   * Validate file
+   * Valida un archivo contra la configuración de su tipo de documento
    */
-  private validateFile(
-    mimeType: string,
-    size: number,
-    fileType: string
-  ): void {
-    // Check size
-    if (size > MAX_FILE_SIZE) {
-      throw new Error(
-        `El archivo es demasiado grande. Tamaño máximo: ${MAX_FILE_SIZE / 1024 / 1024
-        }MB`
-      );
+  validateFile(buffer: Buffer, mimeType: string, documentType: DocumentType): void {
+    const config = this.getDocumentTypeConfig(documentType);
+
+    // Validar tamaño
+    if (buffer.length > config.maxFileSize) {
+      const maxMB = config.maxFileSize / 1024 / 1024;
+      throw new Error(`El archivo excede el tamaño máximo permitido (${maxMB}MB) para ${config.description}.`);
     }
 
-    // Check MIME type
-    const allowedTypes = ALLOWED_MIME_TYPES[fileType as keyof typeof ALLOWED_MIME_TYPES];
-    if (!allowedTypes.includes(mimeType)) {
+    // Validar tipo MIME
+    if (!config.allowedMimeTypes.includes(mimeType)) {
       throw new Error(
-        `Tipo de archivo no permitido. Tipos permitidos: ${allowedTypes.join(
-          ", "
-        )}`
+        `Tipo de archivo no permitido para ${config.description}. Tipos válidos: ${config.allowedMimeTypes.join(", ")}`
       );
     }
   }
 
   /**
-   * Upload file to Backblaze B2
+   * Genera un nombre de archivo único para almacenamiento
    */
-  private async uploadToB2(
-    buffer: Buffer,
-    key: string,
-    mimeType: string
-  ): Promise<string> {
-    console.log("☁️ [StorageService.uploadToB2] Preparando upload a Backblaze B2");
-    console.log("  - Bucket:", B2_BUCKET_NAME);
-    console.log("  - Key:", key);
-    console.log("  - Content-Type:", mimeType);
-    console.log("  - Endpoint:", normalizedEndpoint);
+  private generateKey(authId: string, originalName: string, folder: string): string {
+    const timestamp = Date.now();
+    const safeAuthId = authId || "anonymous";
+    // Sanitizar el nombre original para evitar caracteres problemáticos
+    const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
+    return `${folder}/${safeAuthId}-${timestamp}-${safeName}`;
+  }
 
-    if (!B2_BUCKET_NAME) {
-      console.error("❌ [StorageService.uploadToB2] B2_BUCKET_NAME no está configurado");
-      throw new Error("B2_BUCKET_NAME no está configurado");
+  /**
+   * Sube un archivo a Backblaze B2
+   */
+  private async uploadToB2(buffer: Buffer, key: string, mimeType: string): Promise<void> {
+    if (!this.bucket) {
+      throw new Error("B2_BUCKET no está configurado");
     }
+
+    console.log(`📤 [StorageService] Subiendo archivo: ${key} (${buffer.length} bytes)`);
 
     try {
       const command = new PutObjectCommand({
-        Bucket: B2_BUCKET_NAME,
+        Bucket: this.bucket,
         Key: key,
         Body: buffer,
         ContentType: mimeType,
+        ContentLength: buffer.length, // B2 requiere ContentLength explícito
       });
 
-      console.log("📤 [StorageService.uploadToB2] Enviando comando PutObject...");
-      const commandStartTime = Date.now();
-      await s3Client.send(command);
-      const commandTime = Date.now() - commandStartTime;
-      console.log(`✅ [StorageService.uploadToB2] Comando ejecutado en ${commandTime}ms`);
-
+      const response = await this.s3.send(command);
+      console.log(`✅ [StorageService] Archivo subido exitosamente. ETag: ${response.ETag}`);
     } catch (error) {
-      console.error("❌ [StorageService.uploadToB2] Error al subir archivo:");
-      console.error("  - Tipo:", error instanceof Error ? error.constructor.name : typeof error);
-      console.error("  - Mensaje:", error instanceof Error ? error.message : String(error));
-      if (error instanceof Error && error.stack) {
-        console.error("  - Stack:", error.stack);
-      }
-      throw error;
+      console.error("❌ [StorageService] Error al subir archivo a B2:");
+      console.error("  - Key:", key);
+      console.error("  - Error:", error instanceof Error ? error.message : String(error));
+      throw new Error(`Error al subir archivo: ${error instanceof Error ? error.message : "Error desconocido"}`);
     }
-
-    // Generate public URL
-    // Backblaze B2 public URL format: https://f000.backblazeb2.com/file/bucket-name/key
-    // Or if using custom domain: https://your-domain.com/key
-    console.log("🔗 [StorageService.uploadToB2] Generando URL pública...");
-    const publicUrl = B2_PUBLIC_URL_RAW.includes("backblazeb2.com")
-      ? `https://${B2_PUBLIC_URL}/file/${B2_BUCKET_NAME}/${key}`
-      : `https://${B2_PUBLIC_URL}/${key}`;
-
-    console.log("  - URL generada:", publicUrl);
-    return publicUrl;
   }
 
   /**
-   * Get signed URL for private file access (if needed)
+   * Método genérico para subir un archivo.
+   * Valida, genera el key y sube a B2.
+   * Retorna información del archivo subido SIN efectos secundarios en DB.
+   */
+  async upload(params: UploadParams): Promise<UploadResult> {
+    const { buffer, originalName, mimeType, authId, documentType } = params;
+
+    // 1. Validar archivo
+    this.validateFile(buffer, mimeType, documentType);
+
+    // 2. Obtener configuración y generar key
+    const config = this.getDocumentTypeConfig(documentType);
+    const key = this.generateKey(authId, originalName, config.folder);
+
+    // 3. Subir a B2
+    await this.uploadToB2(buffer, key, mimeType);
+
+    // 4. Retornar resultado (sin lógica de negocio)
+    return {
+      filename: originalName,
+      key,
+      size: buffer.length,
+      mimeType,
+    };
+  }
+
+  /**
+   * Genera una URL firmada para acceso temporal a un archivo privado
    */
   async getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
-    if (!B2_BUCKET_NAME) {
-      throw new Error("B2_BUCKET_NAME no está configurado");
+    if (!this.bucket) {
+      throw new Error("B2_BUCKET no está configurado");
     }
 
     const command = new GetObjectCommand({
-      Bucket: B2_BUCKET_NAME,
+      Bucket: this.bucket,
       Key: key,
     });
 
-    return await getSignedUrl(s3Client, command, { expiresIn });
+    return await getSignedUrl(this.s3, command, { expiresIn });
   }
 
   /**
-   * Upload invoice file
-   */
-  async uploadInvoice(
-    buffer: Buffer,
-    authId: string,
-    originalName: string,
-    mimeType: string
-  ): Promise<UploadResult> {
-    const folder = this.mapTypeToFolder("INVOICES");
-    this.validateFile(mimeType, buffer.length, folder);
-    const key = this.generateFilename(authId, originalName, folder);
-    const url = await this.uploadToB2(buffer, key, mimeType);
-
-    return {
-      filename: originalName,
-      url,
-      path: key,
-      size: buffer.length,
-      mimeType,
-    };
-  }
-
-  /**
-   * Upload payment proof file
-   */
-  async uploadPaymentProof(
-    buffer: Buffer,
-    authId: string,
-    originalName: string,
-    mimeType: string
-  ): Promise<UploadResult> {
-    this.validateFile(mimeType, buffer.length, this.mapTypeToFolder("PAYMENT_PROOFS") as "comprobantes");
-    const key = this.generateFilename(authId, originalName, this.mapTypeToFolder("PAYMENT_PROOFS") || "");
-    const url = await this.uploadToB2(buffer, key, mimeType);
-
-    return {
-      filename: originalName,
-      url,
-      path: key,
-      size: buffer.length,
-      mimeType,
-    };
-  }
-
-  /**
-   * Upload content file (screenshot, etc.)
-   */
-  async uploadContent(
-    buffer: Buffer,
-    originalName: string,
-    authId: string,
-    mimeType: string
-  ): Promise<UploadResult> {
-    this.validateFile(mimeType, buffer.length, this.mapTypeToFolder("CONTENT") as "contenido");
-    const key = this.generateFilename(authId, originalName, this.mapTypeToFolder("CONTENT") || "");
-    const url = await this.uploadToB2(buffer, key, mimeType);
-
-    return {
-      filename: originalName,
-      url,
-      path: key,
-      size: buffer.length,
-      mimeType,
-    };
-  }
-
-  /**
-   * Delete file from Backblaze B2
+   * Elimina un archivo de B2
    */
   async deleteFile(key: string): Promise<void> {
     try {
-      if (!B2_BUCKET_NAME) {
-        throw new Error("B2_BUCKET_NAME no está configurado");
+      if (!this.bucket) {
+        throw new Error("B2_BUCKET no está configurado");
       }
 
-      // If key is a full URL, extract the key part
+      // Extraer el key si se proporciona una URL completa
       let fileKey = key;
       if (key.startsWith("http")) {
-        // Extract key from URL
         const urlParts = key.split("/");
-        const keyIndex = urlParts.findIndex((part) => part === B2_BUCKET_NAME);
+        const keyIndex = urlParts.findIndex((part) => part === this.bucket);
         if (keyIndex !== -1 && urlParts[keyIndex + 1]) {
           fileKey = urlParts.slice(keyIndex + 1).join("/");
         } else {
-          // Try to extract from path
           const pathMatch = key.match(/\/file\/[^/]+\/(.+)$/);
           if (pathMatch) {
             fileKey = pathMatch[1];
@@ -290,86 +257,26 @@ export class StorageService {
       }
 
       const command = new DeleteObjectCommand({
-        Bucket: B2_BUCKET_NAME,
+        Bucket: this.bucket,
         Key: fileKey,
       });
 
-      await s3Client.send(command);
+      await this.s3.send(command);
+      console.log(`🗑️ [StorageService] Archivo eliminado: ${fileKey}`);
     } catch (error) {
-      // File might not exist, log but don't throw
-      console.warn("Error deleting file from B2:", key, error);
+      // No lanzar error si el archivo no existe
+      console.warn("⚠️ [StorageService] Error al eliminar archivo:", key, error);
     }
   }
 
   /**
-   * Get file URL from path/key
+   * Construye la URL pública de un archivo (si el bucket es público)
    */
-  getFileUrl(key: string): string {
+  getPublicUrl(key: string): string {
     if (key.startsWith("http")) {
-      return key; // Already a URL
+      return key;
     }
-
-    // Generate public URL
-    const publicUrl = B2_PUBLIC_URL_RAW.includes("backblazeb2.com")
-      ? `https://${B2_PUBLIC_URL}/file/${B2_BUCKET_NAME}/${key}`
-      : `https://${B2_PUBLIC_URL}/${key}`;
-
-    return publicUrl;
-  }
-
-  /**
-   * Upload product image file
-   */
-  async uploadProductImage(
-    buffer: Buffer,
-    authId: string,
-    originalName: string,
-    mimeType: string
-  ): Promise<UploadResult> {
-    console.log("📦 [StorageService.uploadProductImage] Iniciando subida");
-    console.log("  - Original name:", originalName);
-    console.log("  - MIME type:", mimeType);
-    console.log("  - Size:", `${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
-    console.log("  - Auth ID:", authId);
-
-    const folder = this.mapTypeToFolder("PRODUCTS");
-    console.log("  - Folder:", folder);
-
-    console.log("✅ [StorageService.uploadProductImage] Validando archivo...");
-    this.validateFile(mimeType, buffer.length, folder);
-    console.log("  ✅ Validación exitosa");
-
-    console.log("🔑 [StorageService.uploadProductImage] Generando filename único...");
-    const key = this.generateFilename(authId, originalName, folder);
-    console.log("  - Key generado:", key);
-
-    console.log("☁️ [StorageService.uploadProductImage] Subiendo a Backblaze B2...");
-    const b2StartTime = Date.now();
-    const url = await this.uploadToB2(buffer, key, mimeType);
-    const b2Time = Date.now() - b2StartTime;
-    console.log(`✅ [StorageService.uploadProductImage] Subida a B2 completada en ${b2Time}ms`);
-    console.log("  - URL pública:", url);
-
-    const result = {
-      filename: originalName,
-      url,
-      path: key,
-      size: buffer.length,
-      mimeType,
-    };
-
-    console.log("✅ [StorageService.uploadProductImage] Proceso completado");
-    return result;
-  }
-
-  private mapTypeToFolder(type: string): string {
-    const map: Record<string, string> = {
-      INVOICES: "facturas",
-      PAYMENT_PROOFS: "comprobantes",
-      CONTENT: "contenido",
-      PRODUCTS: "productos",
-    };
-
-    return map[type] || "";
+    // Formato de URL pública de B2
+    return `https://f002.backblazeb2.com/file/${this.bucket}/${key}`;
   }
 }

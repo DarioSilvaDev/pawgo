@@ -1,9 +1,10 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { ProductService } from "../services/product.service.js";
+import { StorageService } from "../services/storage.service.js";
 // import { JwtPayload } from "@pawgo/shared";
 
-const productService = new ProductService();
+const productService = new ProductService(new StorageService());
 
 const createProductSchema = z.object({
   name: z.string().min(1, "El nombre es requerido"),

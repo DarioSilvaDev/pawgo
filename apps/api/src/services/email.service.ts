@@ -50,7 +50,7 @@ if (SMTP_USER && SMTP_PASS) {
  * Generate email header with PawGo logo
  */
 function getEmailHeader(): string {
-  const logoUrl = `${process.env.PUBLIC_URL}/images/logo-170x50.jpeg`;
+  const logoUrl = `${process.env.PUBLIC_URL}/images/PawGo.svg`;
   return `
     <div class="header" style="background-color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
       <img src="${logoUrl}" alt="PawGo Logo" style="max-width: 200px; height: auto;" />

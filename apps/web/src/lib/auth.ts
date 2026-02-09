@@ -157,7 +157,7 @@ export async function fetchAPI(
   options: RequestInit = {}
 ): Promise<Response> {
   const authHeader = getAuthHeader();
-  
+
   // Only add Content-Type if there's a body
   const hasBody = options.body !== undefined && options.body !== null && options.body !== "";
   const headers: HeadersInit = {
@@ -302,6 +302,50 @@ export const authAPI = {
     } catch (error) {
       return null;
     }
+  },
+
+  /**
+   * Request password reset email
+   */
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: "Error al enviar el email",
+      }));
+      throw new Error(error.error || `HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Reset password with token
+   */
+  async resetPassword(token: string, password: string): Promise<{ message: string }> {
+    const response = await fetch(`${API_URL}/api/auth/reset-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ token, password }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: "Error al restablecer la contraseña",
+      }));
+      throw new Error(error.error || `HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
   },
 };
 

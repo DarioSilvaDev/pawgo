@@ -16,6 +16,8 @@ import { influencerPaymentRoutes } from "./routes/influencer-payment.routes.js";
 import { uploadRoutes } from "./routes/upload.routes.js";
 import { analyticsRoutes } from "./routes/analytics.routes.js";
 import { productRoutes } from "./routes/product.routes.js";
+import { geoRoutes } from "./routes/geo.routes.js";
+import { configRoutes } from "./routes/config.routes.js";
 import { TokenService } from "./auth/services/token.service.js";
 import { AuthService } from "./auth/services/auth.service.js";
 import { DiscountCodeService } from "./services/discount-code.service.js";
@@ -26,6 +28,9 @@ import { InfluencerPaymentService } from "./services/influencer-payment.service.
 import { StorageService } from "./services/storage.service.js";
 import { AnalyticsService } from "./services/analytics.service.js";
 import multipart from "@fastify/multipart";
+import { LeadService } from "./services/lead.service.js";
+import { LeadController } from "./controllers/lead.controller.js";
+import { UploadController } from "./controllers/upload.controller.js";
 
 const fastify = Fastify({
   logger: {
@@ -73,13 +78,20 @@ await fastify.register(multipart, {
 // Initialize services
 const tokenService = new TokenService(fastify);
 const authService = new AuthService(tokenService);
+const leadService = new LeadService();
 const discountCodeService = new DiscountCodeService();
 const commissionService = new CommissionService();
 const orderService = new OrderService(discountCodeService, commissionService);
 const mercadoPagoService = new MercadoPagoService();
-const influencerPaymentService = new InfluencerPaymentService();
 const storageService = new StorageService();
+const influencerPaymentService = new InfluencerPaymentService(storageService);
 const analyticsService = new AnalyticsService();
+
+const leadController = new LeadController(leadService);
+const uploadController = new UploadController(
+  storageService,
+  influencerPaymentService
+);
 
 // Initialize storage directories
 await storageService.initialize();
@@ -103,6 +115,7 @@ fastify.get("/", async () => {
 await fastify.register(leadRoutes, {
   prefix: "/api",
   tokenService,
+  leadController,
 });
 await fastify.register(eventRoutes, { prefix: "/api" });
 await fastify.register(authRoutes, {
@@ -132,7 +145,6 @@ await fastify.register(webhookRoutes, {
 });
 await fastify.register(influencerPaymentRoutes, {
   prefix: "/api",
-  influencerPaymentService,
   tokenService,
 });
 await fastify.register(uploadRoutes, {
@@ -140,6 +152,7 @@ await fastify.register(uploadRoutes, {
   storageService,
   influencerPaymentService,
   tokenService,
+  uploadController,
 });
 
 await fastify.register(analyticsRoutes, {
@@ -148,6 +161,14 @@ await fastify.register(analyticsRoutes, {
   tokenService,
 });
 await fastify.register(productRoutes, {
+  prefix: "/api",
+  tokenService,
+});
+await fastify.register(geoRoutes, {
+  prefix: "/api",
+  tokenService,
+});
+await fastify.register(configRoutes, {
   prefix: "/api",
   tokenService,
 });

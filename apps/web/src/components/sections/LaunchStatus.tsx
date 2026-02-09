@@ -3,13 +3,15 @@
 import { EventType } from "@pawgo/shared";
 import { trackEvent } from "@/lib/analytics";
 import { useState } from "react";
-import { LeadFormModal } from "@/components/modals/LeadFormModal";
+import { BuyIntentModal } from "@/components/modals/BuyIntentModal";
+import { useCTAConfig } from "@/contexts/ConfigContext";
 
 export function LaunchStatus() {
   const [showModal, setShowModal] = useState(false);
+  const cta = useCTAConfig();
 
   const handleNotifyClick = () => {
-    trackEvent(EventType.LEAD_SUBMITTED, { source: "boton_quiero_enterarme" });
+    trackEvent(EventType.BUY_INTENT_CLICKED, { source: "boton_quiero_enterarme" });
     setShowModal(true);
   };
 
@@ -36,7 +38,12 @@ export function LaunchStatus() {
         </div>
       </section>
 
-      {showModal && <LeadFormModal onClose={() => setShowModal(false)} />}
+      {showModal && (
+        <BuyIntentModal
+          onClose={() => setShowModal(false)}
+          mode={cta?.modalType || "WAITLIST"}
+        />
+      )}
     </>
   );
 }

@@ -9,12 +9,11 @@ import { UserRole } from "../../../../packages/shared/dist/index.js";
 export async function influencerPaymentRoutes(
   fastify: FastifyInstance,
   options: {
-    influencerPaymentService: InfluencerPaymentService;
     tokenService: TokenService;
   }
 ) {
-  const { influencerPaymentService, tokenService } = options;
-  const controller = createInfluencerPaymentController(influencerPaymentService);
+  const { tokenService } = options;
+  const controller = createInfluencerPaymentController();
   const authenticate = createAuthMiddleware(tokenService);
 
   // Admin routes

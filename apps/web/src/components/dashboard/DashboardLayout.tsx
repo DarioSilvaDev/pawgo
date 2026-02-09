@@ -105,6 +105,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   >
                     Órdenes
                   </Link>
+                  <Link
+                    href="/dashboard/config"
+                    className="px-4 py-2 text-sm font-bold text-primary-turquoise hover:bg-primary-turquoise/5 rounded-lg transition-colors"
+                  >
+                    Configuración
+                  </Link>
                 </>
               )}
               {isInfluencer && (
@@ -292,6 +298,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     onClick={() => setShowMobileMenu(false)}
                   >
                     Órdenes
+                  </Link>
+                  <Link
+                    href="/dashboard/config"
+                    className="block px-3 py-2 text-base font-bold text-primary-turquoise hover:bg-primary-turquoise/5 rounded-lg"
+                    onClick={() => setShowMobileMenu(false)}
+                  >
+                    Configuración
                   </Link>
                 </>
               )}

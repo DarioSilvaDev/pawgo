@@ -7,6 +7,7 @@ import {
 } from "../../../../packages/shared/dist/index.js";
 import { InfluencerPaymentService } from "../services/influencer-payment.service.js";
 import { InfluencerPaymentStatus } from "@prisma/client";
+import { StorageService } from "../services/storage.service.js";
 
 // Validation schemas
 const createPaymentSchema = z.object({
@@ -48,9 +49,9 @@ const updatePaymentSchema = z.object({
   }
 });
 
-export function createInfluencerPaymentController(
-  influencerPaymentService: InfluencerPaymentService
-) {
+const influencerPaymentService = new InfluencerPaymentService(new StorageService());
+
+export function createInfluencerPaymentController() {
   return {
     async create(request: FastifyRequest, reply: FastifyReply) {
       try {

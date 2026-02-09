@@ -98,6 +98,82 @@ export function createAnalyticsController(analyticsService: AnalyticsService) {
         throw error;
       }
     },
+
+    /**
+     * Get event metrics (funnel analytics)
+     * GET /api/analytics/event-metrics
+     */
+    async getEventMetrics(request: FastifyRequest, reply: FastifyReply) {
+      try {
+        const query = getStatsQuerySchema.parse(request.query);
+
+        const startDate = query.startDate
+          ? new Date(query.startDate)
+          : undefined;
+        const endDate = query.endDate ? new Date(query.endDate) : undefined;
+
+        const metrics = await analyticsService.getEventMetrics(
+          startDate,
+          endDate
+        );
+
+        reply.send(metrics);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          reply.status(400).send({
+            error: "Error de validación",
+            details: error.errors,
+          });
+          return;
+        }
+
+        if (error instanceof Error) {
+          reply.status(400).send({
+            error: error.message,
+          });
+          return;
+        }
+
+        throw error;
+      }
+    },
+
+    /**
+     * Get event metrics trend (daily breakdown)
+     * GET /api/analytics/event-metrics-trend
+     */
+    async getEventMetricsTrend(request: FastifyRequest, reply: FastifyReply) {
+      try {
+        const query = getSalesByPeriodQuerySchema.parse(request.query);
+
+        const startDate = new Date(query.startDate);
+        const endDate = new Date(query.endDate);
+
+        const metrics = await analyticsService.getEventMetricsByDateRange(
+          startDate,
+          endDate
+        );
+
+        reply.send(metrics);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          reply.status(400).send({
+            error: "Error de validación",
+            details: error.errors,
+          });
+          return;
+        }
+
+        if (error instanceof Error) {
+          reply.status(400).send({
+            error: error.message,
+          });
+          return;
+        }
+
+        throw error;
+      }
+    },
   };
 }
 

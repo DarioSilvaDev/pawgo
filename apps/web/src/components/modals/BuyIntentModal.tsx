@@ -2,16 +2,16 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { DogSize, EventType } from "@pawgo/shared";
-import { trackEvent } from "@/lib/analytics";
+import { DogSize } from "@pawgo/shared";
 import { submitLead } from "@/lib/api";
 import { useToast } from "@/components/ui/useToast";
 
 interface BuyIntentModalProps {
   onClose: () => void;
+  mode?: "BUY_INTENT" | "WAITLIST";
 }
 
-export function BuyIntentModal({ onClose }: BuyIntentModalProps) {
+export function BuyIntentModal({ onClose, mode = "BUY_INTENT" }: BuyIntentModalProps) {
   const { showToast, ToastView } = useToast();
   const [formData, setFormData] = useState({
     name: "",
@@ -30,18 +30,15 @@ export function BuyIntentModal({ onClose }: BuyIntentModalProps) {
         email: formData.email,
         name: formData.name || undefined,
         dogSize: formData.dogSize || undefined,
+        incentive: mode === "BUY_INTENT" ? "20_off_launch" : "waitlist_stock",
       });
 
-      // Registrar evento de lead enviado (el click en "Quiero uno" ya se registró en Hero.tsx)
-      trackEvent(EventType.LEAD_SUBMITTED, {
-        source: "modal_intencion_compra",
-        hasName: !!formData.name,
-        hasDogSize: !!formData.dogSize,
-      });
+      // El evento LEAD_SUBMITTED ahora se registra automáticamente en el backend
 
       showToast({
         type: "success",
         message: "¡Perfecto! Te notificaremos cuando esté disponible.",
+        durationMs: 4000,
       });
       setTimeout(() => {
         onClose();
@@ -73,15 +70,34 @@ export function BuyIntentModal({ onClose }: BuyIntentModalProps) {
         className="bg-white rounded-lg max-w-md w-full p-8 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2
+        {/* <h2
           id="modal-title"
           className="text-2xl font-bold text-text-black mb-4"
         >
           ¡Próximamente!
         </h2>
         <p className="text-text-dark-gray mb-6">
-          PawGo estará disponible muy pronto. Dejanos tu email y te avisaremos
+          PawGo estará disponible muy pronto. Dejanos tus datos y te avisaremos
           en cuanto esté disponible en Argentina.
+        </p> */}
+
+        <h2
+          id="modal-title"
+          className="text-2xl font-bold text-text-black mb-4"
+        >
+          {mode === "BUY_INTENT" ? "Sé de los primeros 🐾" : "¡Próximamente! 🐾"}
+        </h2>
+        <p className="text-text-dark-gray mb-6">
+          {mode === "BUY_INTENT" ? (
+            <>
+              PawGo llega muy pronto a Argentina. Registrate y obtené un{" "}
+              <strong>20% OFF de lanzamiento</strong> por ser de los primeros en enterarte.
+            </>
+          ) : (
+            <>
+              PawGo estará disponible muy pronto. Dejanos tus datos y te avisaremos en cuanto tengamos <strong>stock disponible</strong> en Argentina.
+            </>
+          )}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">

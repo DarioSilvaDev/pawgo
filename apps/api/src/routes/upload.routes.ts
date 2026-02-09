@@ -1,9 +1,10 @@
 import { FastifyInstance } from "fastify";
-import { createUploadController } from "../controllers/upload.controller.js";
+import { UploadController } from "../controllers/upload.controller.js";
 import { StorageService } from "../services/storage.service.js";
 import { InfluencerPaymentService } from "../services/influencer-payment.service.js";
-import { createAuthMiddleware } from "../auth/middleware/auth.middleware.js";
+import { createAuthMiddleware, requireRole } from "../auth/middleware/auth.middleware.js";
 import { TokenService } from "../auth/services/token.service.js";
+import { UserRole } from "../../../../packages/shared/dist/index.js";
 
 export async function uploadRoutes(
   fastify: FastifyInstance,
@@ -11,14 +12,12 @@ export async function uploadRoutes(
     storageService: StorageService;
     influencerPaymentService: InfluencerPaymentService;
     tokenService: TokenService;
+    uploadController: UploadController;
   }
 ) {
-  const { storageService, influencerPaymentService, tokenService } = options;
-  const uploadController = createUploadController(
-    storageService,
-    influencerPaymentService
-  );
+  const { uploadController, tokenService } = options;
   const authenticate = createAuthMiddleware(tokenService);
+  const requireAdmin = requireRole(UserRole.ADMIN);
 
   // Upload invoice (influencer or admin)
   fastify.post(
@@ -33,7 +32,7 @@ export async function uploadRoutes(
   fastify.post(
     "/influencer-payments/:id/upload-payment-proof",
     {
-      preHandler: authenticate,
+      preHandler: [authenticate, requireAdmin],
     },
     uploadController.uploadPaymentProof
   );
@@ -51,8 +50,17 @@ export async function uploadRoutes(
   fastify.post(
     "/upload/product-image",
     {
-      preHandler: authenticate,
+      preHandler: [authenticate, requireAdmin],
     },
     uploadController.uploadProductImage
+  );
+
+  // Download file
+  fastify.get(
+    "/upload/download",
+    {
+      preHandler: authenticate,
+    },
+    uploadController.download
   );
 }

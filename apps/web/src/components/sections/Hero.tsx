@@ -6,16 +6,36 @@ import { useRouter } from "next/navigation";
 import { trackEvent } from "@/lib/analytics";
 import { EventType } from "@pawgo/shared";
 import { BuyIntentModal } from "@/components/modals/BuyIntentModal";
+import { useCTAConfig } from "@/contexts/ConfigContext";
 
 export function Hero() {
   const [showModal, setShowModal] = useState(false);
   const router = useRouter();
+  const cta = useCTAConfig();
 
   const handleCTAClick = () => {
     trackEvent(EventType.BUY_INTENT_CLICKED, { source: "boton_quiero_uno" });
-    // setShowModal(true);
-    // Redirigir a la página de checkout
-    router.push("/checkout");
+
+    // Fallback if config is not yet loaded or corrupt
+    if (!cta) {
+      router.push("/checkout");
+      return;
+    }
+
+    switch (cta.action) {
+      case "SHOW_MODAL":
+        // cta.modalType could be used here to select different modals if they existed
+        setShowModal(true);
+        break;
+
+      case "REDIRECT":
+        router.push(cta.url ?? "/checkout");
+        break;
+
+      default:
+        console.warn("Unknown CTA action", cta);
+        router.push("/checkout");
+    }
   };
 
   const handleLearnMoreClick = () => {
@@ -88,7 +108,12 @@ export function Hero() {
         </div>
       </div>
 
-      {showModal && <BuyIntentModal onClose={() => setShowModal(false)} />}
+      {showModal && (
+        <BuyIntentModal
+          onClose={() => setShowModal(false)}
+          mode={cta?.modalType}
+        />
+      )}
     </section>
   );
 }

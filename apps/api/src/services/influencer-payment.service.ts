@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, Prisma, InfluencerPaymentStatus } from "@prisma/client";
 import {
   CreateInfluencerPaymentDto,
   UpdateInfluencerPaymentDto,
@@ -6,15 +6,17 @@ import {
 } from "../../../../packages/shared/dist/index.js";
 import { emailService } from "./email.service.js";
 import { prismaDecimal, prismaNumber, n } from "../utils/decimal.js";
+import { StorageService } from "./storage.service.js";
 
 const prisma = new PrismaClient();
-
-type InfluencerPaymentStatus = InfluencerPaymentWithDetails["status"];
 
 export class InfluencerPaymentService {
   /**
    * Create a new influencer payment request
    */
+
+  constructor(private readonly storageService: StorageService) { }
+
   async create(
     data: CreateInfluencerPaymentDto
   ): Promise<InfluencerPaymentWithDetails> {
@@ -242,12 +244,12 @@ export class InfluencerPaymentService {
       cvu: payment.cvu ?? undefined,
       bankName: payment.bankName ?? undefined,
       mercadopagoEmail: payment.mercadopagoEmail ?? undefined,
-      invoiceUrl: payment.invoices?.[0]?.url ?? payment.invoiceUrl ?? undefined,
+      invoiceUrl: payment.invoices?.[0]?.url ? await this.storageService.getSignedUrl(payment.invoices?.[0]?.url) : payment.invoiceUrl ? await this.storageService.getSignedUrl(payment.invoiceUrl) : undefined,
       invoiceRejectionReason:
         payment.invoices?.[0]?.status === "rejected"
           ? payment.invoices?.[0]?.observation ?? undefined
           : payment.invoiceRejectionReason ?? undefined,
-      paymentProofUrl: payment.paymentProofUrl ?? undefined,
+      paymentProofUrl: payment.paymentProofUrl ? await this.storageService.getSignedUrl(payment.paymentProofUrl) : undefined,
       invoiceUploadedAt: payment.invoiceUploadedAt ?? undefined,
       invoiceRejectedAt:
         payment.invoices?.[0]?.status === "rejected"
@@ -258,22 +260,22 @@ export class InfluencerPaymentService {
       cancelledAt: payment.cancelledAt ?? undefined,
       latestInvoice: payment.invoices?.[0]
         ? {
-            id: payment.invoices[0].id,
-            influencerPaymentId: payment.invoices[0].influencerPaymentId,
-            status: payment.invoices[0].status as
-              | "uploaded"
-              | "approved"
-              | "rejected",
-            url: payment.invoices[0].url,
-            observation: payment.invoices[0].observation ?? undefined,
-            enabled: payment.invoices[0].enabled,
-            uploadedByAuthId: payment.invoices[0].uploadedByAuthId,
-            statusChangedByAuthId:
-              payment.invoices[0].statusChangedByAuthId ?? undefined,
-            statusChangedAt: payment.invoices[0].statusChangedAt ?? undefined,
-            createdAt: payment.invoices[0].createdAt,
-            updatedAt: payment.invoices[0].updatedAt,
-          }
+          id: payment.invoices[0].id,
+          influencerPaymentId: payment.invoices[0].influencerPaymentId,
+          status: payment.invoices[0].status as
+            | "uploaded"
+            | "approved"
+            | "rejected",
+          url: payment.invoices[0].url,
+          observation: payment.invoices[0].observation ?? undefined,
+          enabled: payment.invoices[0].enabled,
+          uploadedByAuthId: payment.invoices[0].uploadedByAuthId,
+          statusChangedByAuthId:
+            payment.invoices[0].statusChangedByAuthId ?? undefined,
+          statusChangedAt: payment.invoices[0].statusChangedAt ?? undefined,
+          createdAt: payment.invoices[0].createdAt,
+          updatedAt: payment.invoices[0].updatedAt,
+        }
         : undefined,
       influencer: {
         id: payment.influencer.id,
@@ -395,23 +397,23 @@ export class InfluencerPaymentService {
           cancelledAt: payment.cancelledAt ?? undefined,
           latestInvoice: payment.invoices?.[0]
             ? {
-                id: payment.invoices[0].id,
-                influencerPaymentId: payment.invoices[0].influencerPaymentId,
-                status: payment.invoices[0].status as
-                  | "uploaded"
-                  | "approved"
-                  | "rejected",
-                url: payment.invoices[0].url,
-                observation: payment.invoices[0].observation ?? undefined,
-                enabled: payment.invoices[0].enabled,
-                uploadedByAuthId: payment.invoices[0].uploadedByAuthId,
-                statusChangedByAuthId:
-                  payment.invoices[0].statusChangedByAuthId ?? undefined,
-                statusChangedAt:
-                  payment.invoices[0].statusChangedAt ?? undefined,
-                createdAt: payment.invoices[0].createdAt,
-                updatedAt: payment.invoices[0].updatedAt,
-              }
+              id: payment.invoices[0].id,
+              influencerPaymentId: payment.invoices[0].influencerPaymentId,
+              status: payment.invoices[0].status as
+                | "uploaded"
+                | "approved"
+                | "rejected",
+              url: payment.invoices[0].url,
+              observation: payment.invoices[0].observation ?? undefined,
+              enabled: payment.invoices[0].enabled,
+              uploadedByAuthId: payment.invoices[0].uploadedByAuthId,
+              statusChangedByAuthId:
+                payment.invoices[0].statusChangedByAuthId ?? undefined,
+              statusChangedAt:
+                payment.invoices[0].statusChangedAt ?? undefined,
+              createdAt: payment.invoices[0].createdAt,
+              updatedAt: payment.invoices[0].updatedAt,
+            }
             : undefined,
           influencer: {
             id: payment.influencer.id,
@@ -543,8 +545,7 @@ export class InfluencerPaymentService {
       const allowedTransitions = validTransitions[currentStatus] || [];
       if (!allowedTransitions.includes(data.status)) {
         throw new Error(
-          `No se puede cambiar el estado de "${payment.status}" a "${
-            data.status
+          `No se puede cambiar el estado de "${payment.status}" a "${data.status
           }". Transiciones permitidas: ${allowedTransitions.join(", ")}`
         );
       }
@@ -765,23 +766,23 @@ export class InfluencerPaymentService {
       cancelledAt: updatedPayment.cancelledAt ?? undefined,
       latestInvoice: updatedPayment.invoices?.[0]
         ? {
-            id: updatedPayment.invoices[0].id,
-            influencerPaymentId: updatedPayment.invoices[0].influencerPaymentId,
-            status: updatedPayment.invoices[0].status as
-              | "uploaded"
-              | "approved"
-              | "rejected",
-            url: updatedPayment.invoices[0].url,
-            observation: updatedPayment.invoices[0].observation ?? undefined,
-            enabled: updatedPayment.invoices[0].enabled,
-            uploadedByAuthId: updatedPayment.invoices[0].uploadedByAuthId,
-            statusChangedByAuthId:
-              updatedPayment.invoices[0].statusChangedByAuthId ?? undefined,
-            statusChangedAt:
-              updatedPayment.invoices[0].statusChangedAt ?? undefined,
-            createdAt: updatedPayment.invoices[0].createdAt,
-            updatedAt: updatedPayment.invoices[0].updatedAt,
-          }
+          id: updatedPayment.invoices[0].id,
+          influencerPaymentId: updatedPayment.invoices[0].influencerPaymentId,
+          status: updatedPayment.invoices[0].status as
+            | "uploaded"
+            | "approved"
+            | "rejected",
+          url: updatedPayment.invoices[0].url,
+          observation: updatedPayment.invoices[0].observation ?? undefined,
+          enabled: updatedPayment.invoices[0].enabled,
+          uploadedByAuthId: updatedPayment.invoices[0].uploadedByAuthId,
+          statusChangedByAuthId:
+            updatedPayment.invoices[0].statusChangedByAuthId ?? undefined,
+          statusChangedAt:
+            updatedPayment.invoices[0].statusChangedAt ?? undefined,
+          createdAt: updatedPayment.invoices[0].createdAt,
+          updatedAt: updatedPayment.invoices[0].updatedAt,
+        }
         : undefined,
       influencer: {
         id: updatedPayment.influencer.id,

@@ -150,7 +150,7 @@ export async function deleteVariant(variantId: string): Promise<void> {
 export async function uploadProductImage(
   file: File,
   productId?: string
-): Promise<{ url: string; filename: string }> {
+): Promise<{ key: string; filename: string, success: boolean }> {
   console.log("🌐 [uploadProductImage] Iniciando request de subida");
   console.log("  - File:", file.name, `(${(file.size / 1024 / 1024).toFixed(2)} MB)`);
   console.log("  - ProductId:", productId || "undefined");
@@ -168,16 +168,12 @@ export async function uploadProductImage(
 
   const formData = new FormData();
   formData.append("file", file);
-  if (productId) {
-    formData.append("productId", productId);
-    console.log("➕ [uploadProductImage] productId agregado al FormData");
-  }
 
   console.log("📤 [uploadProductImage] Enviando request a:", `${API_URL}/api/upload/product-image`);
   const startTime = Date.now();
 
   try {
-    const response = await fetch(`${API_URL}/api/upload/product-image`, {
+    const response = await fetch(`${API_URL}/api/upload/product-image?productId=${productId}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -213,3 +209,57 @@ export async function uploadProductImage(
     throw error;
   }
 }
+
+export async function downloadImage(key: string): Promise<string> {
+  console.log("🌐 [downloadImage] Iniciando request de descarga");
+  console.log("  - Key:", key);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+  console.log("  - API URL:", API_URL);
+
+  const token = localStorage.getItem("pawgo_access_token");
+
+  if (!token) {
+    console.error("❌ [downloadImage] No hay token de autenticación");
+    throw new Error("No autenticado");
+  }
+  console.log("✅ [downloadImage] Token encontrado");
+
+  console.log("📤 [downloadImage] Enviando request a:", `${API_URL}/api/upload/download?key=${key}`);
+  const startTime = Date.now();
+
+  try {
+    const response = await fetch(`${API_URL}/api/upload/download?key=${key}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const requestTime = Date.now() - startTime;
+    console.log(`📥 [downloadImage] Respuesta recibida en ${requestTime}ms`);
+    console.log("  - Status:", response.status, response.statusText);
+    console.log("  - OK:", response.ok);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: "Error desconocido",
+      }));
+      console.error("❌ [downloadImage] Error en la respuesta:", error);
+      throw new Error(error.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log("✅ [downloadImage] Descarga exitosa:");
+    console.log("  - URL:", result.url);
+
+    return result.url;
+  } catch (error) {
+    console.error("❌ [downloadImage] Error en fetch:", error);
+    if (error instanceof Error) {
+      console.error("  - Mensaje:", error.message);
+      console.error("  - Stack:", error.stack);
+    }
+    throw error;
+  }
+} 

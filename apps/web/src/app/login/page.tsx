@@ -40,6 +40,15 @@ export default function LoginPage() {
 
         <LoginForm />
 
+        <div className="mt-4 text-center">
+          <Link
+            href="/forgot-password"
+            className="text-primary-turquoise hover:underline text-sm"
+          >
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </div>
+
         <div className="mt-6 text-center">
           <p className="text-text-dark-gray">
             ¿No tienes cuenta?{" "}

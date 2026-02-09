@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { JwtPayload } from "../../../../../packages/shared/dist/index.js";
 import { randomUUID } from "crypto";
 
-const prisma = new PrismaClient();
+import { prisma } from "../../config/prisma.client.js";
 
 // Token expiration times (in seconds)
 const ACCESS_TOKEN_EXPIRES_IN = 2 * 60 * 60; // 2 hours

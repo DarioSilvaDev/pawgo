@@ -358,5 +358,212 @@ export class AnalyticsService {
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
   }
-}
 
+  /**
+   * Get event metrics for analytics dashboard (funnel)
+   */
+  async getEventMetrics(
+    startDate?: Date,
+    endDate?: Date
+  ): Promise<{
+    pageViews: number;
+    ctaClicks: number;
+    buyIntentClicks: number;
+    leadsSubmitted: number;
+    conversionRate: number; // buyIntentClicks -> leadsSubmitted
+    clickThroughRate: number; // pageViews -> buyIntentClicks
+  }> {
+    const dateFilter = startDate && endDate
+      ? {
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      }
+      : {};
+
+    // Get event counters
+    const pageViewsData = await prisma.eventCounter.aggregate({
+      where: {
+        type: "vista_pagina",
+        ...dateFilter,
+      },
+      _sum: {
+        count: true,
+      },
+    });
+
+    const ctaClicksData = await prisma.eventCounter.aggregate({
+      where: {
+        type: "click_cta",
+        ...dateFilter,
+      },
+      _sum: {
+        count: true,
+      },
+    });
+
+    const buyIntentClicksData = await prisma.eventCounter.aggregate({
+      where: {
+        type: "click_intencion_compra",
+        ...dateFilter,
+      },
+      _sum: {
+        count: true,
+      },
+    });
+
+    // Get leads submitted from Event table (not counted, stored individually)
+    const leadEventFilter = startDate && endDate
+      ? {
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      }
+      : {};
+
+    const leadsSubmittedData = await prisma.event.count({
+      where: {
+        type: "lead_enviado",
+        ...leadEventFilter,
+      },
+    });
+
+    const pageViews = pageViewsData._sum.count || 0;
+    const ctaClicks = ctaClicksData._sum.count || 0;
+    const buyIntentClicks = buyIntentClicksData._sum.count || 0;
+    const leadsSubmitted = leadsSubmittedData || 0;
+
+    // Calculate conversion rates
+    const conversionRate = buyIntentClicks > 0
+      ? (leadsSubmitted / buyIntentClicks) * 100
+      : 0;
+
+    const clickThroughRate = pageViews > 0
+      ? (buyIntentClicks / pageViews) * 100
+      : 0;
+
+    return {
+      pageViews,
+      ctaClicks,
+      buyIntentClicks,
+      leadsSubmitted,
+      conversionRate: Math.round(conversionRate * 100) / 100, // 2 decimals
+      clickThroughRate: Math.round(clickThroughRate * 100) / 100, // 2 decimals
+    };
+  }
+
+  /**
+   * Get event metrics by date range (for trend visualization)
+   */
+  async getEventMetricsByDateRange(
+    startDate: Date,
+    endDate: Date
+  ): Promise<Array<{
+    date: string;
+    pageViews: number;
+    ctaClicks: number;
+    buyIntentClicks: number;
+    leadsSubmitted: number;
+    conversionRate: number;
+    clickThroughRate: number;
+  }>> {
+    // Get all event counters in date range
+    const eventCounters = await prisma.eventCounter.findMany({
+      where: {
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      orderBy: {
+        date: 'asc',
+      },
+    });
+
+    // Get all lead events in date range
+    const leadEvents = await prisma.event.findMany({
+      where: {
+        type: "lead_enviado",
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+    });
+
+    // Group by date
+    const dateMap = new Map<string, {
+      pageViews: number;
+      ctaClicks: number;
+      buyIntentClicks: number;
+      leadsSubmitted: number;
+    }>();
+
+    // Process event counters
+    eventCounters.forEach((counter) => {
+      const dateKey = counter.date.toISOString().split('T')[0];
+
+      if (!dateMap.has(dateKey)) {
+        dateMap.set(dateKey, {
+          pageViews: 0,
+          ctaClicks: 0,
+          buyIntentClicks: 0,
+          leadsSubmitted: 0,
+        });
+      }
+
+      const dayData = dateMap.get(dateKey)!;
+
+      if (counter.type === "vista_pagina") {
+        dayData.pageViews += counter.count;
+      } else if (counter.type === "click_cta") {
+        dayData.ctaClicks += counter.count;
+      } else if (counter.type === "click_intencion_compra") {
+        dayData.buyIntentClicks += counter.count;
+      }
+    });
+
+    // Process lead events
+    leadEvents.forEach((event) => {
+      const dateKey = event.createdAt.toISOString().split('T')[0];
+
+      if (!dateMap.has(dateKey)) {
+        dateMap.set(dateKey, {
+          pageViews: 0,
+          ctaClicks: 0,
+          buyIntentClicks: 0,
+          leadsSubmitted: 0,
+        });
+      }
+
+      const dayData = dateMap.get(dateKey)!;
+      dayData.leadsSubmitted += 1;
+    });
+
+    // Convert to array and calculate rates
+    const result = Array.from(dateMap.entries()).map(([date, data]) => {
+      const conversionRate = data.buyIntentClicks > 0
+        ? (data.leadsSubmitted / data.buyIntentClicks) * 100
+        : 0;
+
+      const clickThroughRate = data.pageViews > 0
+        ? (data.buyIntentClicks / data.pageViews) * 100
+        : 0;
+
+      return {
+        date,
+        pageViews: data.pageViews,
+        ctaClicks: data.ctaClicks,
+        buyIntentClicks: data.buyIntentClicks,
+        leadsSubmitted: data.leadsSubmitted,
+        conversionRate: Math.round(conversionRate * 100) / 100,
+        clickThroughRate: Math.round(clickThroughRate * 100) / 100,
+      };
+    });
+
+    // Sort by date
+    return result.sort((a, b) => a.date.localeCompare(b.date));
+  }
+}

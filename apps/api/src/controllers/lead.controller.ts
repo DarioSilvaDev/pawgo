@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { leadService } from '../services/lead.service.js';
+import { LeadService } from '../services/lead.service.js';
 import { CreateLeadDto, DogSize } from '../../../../packages/shared/dist/index.js';
 import { z } from 'zod';
 
@@ -7,14 +7,21 @@ const createLeadSchema = z.object({
   email: z.string().email(),
   name: z.string().optional(),
   dogSize: z.enum(['small', 'medium', 'large', 'extra_large']).optional(),
+  incentive: z.string().optional(),
 });
 
-export const leadController = {
-  async create(request: FastifyRequest, reply: FastifyReply) {
+export class LeadController {
+  private leadService: LeadService;
+
+  constructor(leadService: LeadService) {
+    this.leadService = leadService;
+  }
+
+  create = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = createLeadSchema.parse(request.body);
-      const lead = await leadService.create(body as CreateLeadDto);
-      
+      const lead = await this.leadService.create(body as CreateLeadDto);
+
       reply.status(201).send(lead);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -24,19 +31,19 @@ export const leadController = {
         });
         return;
       }
-      
+
       if (error instanceof Error && error.message.includes('Unique constraint')) {
         reply.status(409).send({
           error: 'Email already registered',
         });
         return;
       }
-      
+
       throw error;
     }
-  },
+  };
 
-  async getAll(request: FastifyRequest, reply: FastifyReply) {
+  getAll = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as {
         search?: string;
@@ -68,7 +75,7 @@ export const leadController = {
         filters.endDate = new Date(query.endDate);
       }
 
-      const leads = await leadService.getAll(filters);
+      const leads = await this.leadService.getAll(filters);
       reply.send({ leads });
     } catch (error) {
       if (error instanceof Error) {
@@ -79,12 +86,12 @@ export const leadController = {
       }
       throw error;
     }
-  },
+  };
 
-  async getById(request: FastifyRequest, reply: FastifyReply) {
+  getById = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
-      const lead = await leadService.getById(id);
+      const lead = await this.leadService.getById(id);
 
       if (!lead) {
         reply.status(404).send({
@@ -103,12 +110,12 @@ export const leadController = {
       }
       throw error;
     }
-  },
+  };
 
-  async delete(request: FastifyRequest, reply: FastifyReply) {
+  delete = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
-      await leadService.delete(id);
+      await this.leadService.delete(id);
 
       reply.status(204).send();
     } catch (error) {
@@ -120,6 +127,6 @@ export const leadController = {
       }
       throw error;
     }
-  },
-};
+  };
+}
 
