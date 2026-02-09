@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { CTAConfig, CTAAction } from "@pawgo/shared";
 import { getAdminCTAConfig, updateCTAConfig } from "@/lib/config";
 import { useToast } from "@/components/ui/useToast";
@@ -11,11 +11,7 @@ export function CTAConfigForm() {
     const [saving, setSaving] = useState(false);
     const { showToast, ToastView } = useToast();
 
-    useEffect(() => {
-        loadConfig();
-    }, []);
-
-    const loadConfig = async () => {
+    const loadConfig = useCallback(async () => {
         try {
             setLoading(true);
             const data = await getAdminCTAConfig();
@@ -29,7 +25,11 @@ export function CTAConfigForm() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [showToast]);
+
+    useEffect(() => {
+        loadConfig();
+    }, [loadConfig]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -175,7 +175,7 @@ export function CTAConfigForm() {
                             />
                             <p className="mt-2 text-xs text-gray-500 flex items-start gap-1">
                                 <span className="inline-block p-1 bg-blue-50 text-blue-600 rounded shrink-0">💡</span>
-                                Usa "/checkout" para el flujo interno o una URL completa (https://...) para links externos.
+                                Usa &quot;/checkout&quot; para el flujo interno o una URL completa (https://...) para links externos.
                             </p>
                         </div>
                     )}
@@ -196,7 +196,7 @@ export function CTAConfigForm() {
                             </select>
                             <p className="mt-2 text-xs text-gray-500 flex items-start gap-1">
                                 <span className="inline-block p-1 bg-blue-50 text-blue-600 rounded shrink-0">💡</span>
-                                El formulario de "Lanzamiento" está optimizado para capturar leads ofreciendo beneficios.
+                                El formulario de &quot;Lanzamiento&quot; está optimizado para capturar leads ofreciendo beneficios.
                             </p>
                         </div>
                     )}

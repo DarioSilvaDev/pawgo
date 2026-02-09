@@ -22,25 +22,6 @@ export function ProfileView() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (isInfluencer) {
-      loadProfile();
-    } else {
-      // For admin or other users, use auth data
-      if (user) {
-        setProfile({
-          id: user.id,
-          name: user.name || "Usuario",
-          email: user.email,
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-        setLoading(false);
-      }
-    }
-  }, [user, isInfluencer]);
-
   const loadProfile = useCallback(async () => {
     try {
       setLoading(true);
@@ -168,11 +149,10 @@ export function ProfileView() {
                 <dt className="text-sm font-medium text-gray-500">Estado</dt>
                 <dd className="mt-1">
                   <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      profile.isActive
-                        ? "bg-green-100 text-green-800"
-                        : "bg-gray-100 text-gray-800"
-                    }`}
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${profile.isActive
+                      ? "bg-green-100 text-green-800"
+                      : "bg-gray-100 text-gray-800"
+                      }`}
                   >
                     {profile.isActive ? "Activo" : "Inactivo"}
                   </span>

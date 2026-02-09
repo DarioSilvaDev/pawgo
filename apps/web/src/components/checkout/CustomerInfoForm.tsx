@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { CustomerInfo } from "@/lib/order";
 
 interface CustomerInfoFormProps {
@@ -22,11 +22,7 @@ export function CustomerInfoForm({
 
   const [errors, setErrors] = useState<Partial<Record<keyof CustomerInfo, string>>>({});
 
-  useEffect(() => {
-    validateForm();
-  }, [formData]);
-
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     const newErrors: Partial<Record<keyof CustomerInfo, string>> = {};
 
     if (!formData.name.trim()) {
@@ -63,7 +59,11 @@ export function CustomerInfoForm({
     } else {
       onInfoChange(null);
     }
-  };
+  }, [formData, onInfoChange]);
+
+  useEffect(() => {
+    validateForm();
+  }, [validateForm]);
 
   const handleChange = (field: keyof CustomerInfo, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -92,9 +92,8 @@ export function CustomerInfoForm({
             id="name"
             value={formData.name}
             onChange={(e) => handleChange("name", e.target.value)}
-            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-turquoise ${
-              errors.name ? "border-red-500" : "border-gray-300"
-            }`}
+            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-turquoise ${errors.name ? "border-red-500" : "border-gray-300"
+              }`}
             placeholder="Juan"
           />
           {errors.name && (
@@ -115,9 +114,8 @@ export function CustomerInfoForm({
             id="lastName"
             value={formData.lastName}
             onChange={(e) => handleChange("lastName", e.target.value)}
-            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-turquoise ${
-              errors.lastName ? "border-red-500" : "border-gray-300"
-            }`}
+            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-turquoise ${errors.lastName ? "border-red-500" : "border-gray-300"
+              }`}
             placeholder="Pérez"
           />
           {errors.lastName && (
@@ -143,9 +141,8 @@ export function CustomerInfoForm({
               handleChange("dni", value);
             }}
             maxLength={8}
-            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-turquoise ${
-              errors.dni ? "border-red-500" : "border-gray-300"
-            }`}
+            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-turquoise ${errors.dni ? "border-red-500" : "border-gray-300"
+              }`}
             placeholder="12345678"
           />
           {errors.dni && (
@@ -170,9 +167,8 @@ export function CustomerInfoForm({
               const value = e.target.value.replace(/[^\d\s+\-]/g, "");
               handleChange("phoneNumber", value);
             }}
-            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-turquoise ${
-              errors.phoneNumber ? "border-red-500" : "border-gray-300"
-            }`}
+            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-turquoise ${errors.phoneNumber ? "border-red-500" : "border-gray-300"
+              }`}
             placeholder="+54 9 11 1234-5678"
           />
           {errors.phoneNumber && (
@@ -193,9 +189,8 @@ export function CustomerInfoForm({
             id="email"
             value={formData.email}
             onChange={(e) => handleChange("email", e.target.value)}
-            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-turquoise ${
-              errors.email ? "border-red-500" : "border-gray-300"
-            }`}
+            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-turquoise ${errors.email ? "border-red-500" : "border-gray-300"
+              }`}
             placeholder="juan.perez@example.com"
           />
           {errors.email && (

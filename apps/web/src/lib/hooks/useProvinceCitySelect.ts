@@ -146,12 +146,13 @@ export function useProvinceCitySelect(
             }
         };
 
+        const currentAbortController = abortControllerRef.current;
         loadCiudades();
 
         return () => {
             isMounted = false;
-            if (abortControllerRef.current) {
-                abortControllerRef.current.abort();
+            if (currentAbortController) {
+                currentAbortController.abort();
             }
         };
     }, [selectedProvinciaId]);

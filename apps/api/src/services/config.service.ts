@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma.client.js";
 
 // Tipos para la configuración del CTA
@@ -75,12 +75,12 @@ export class ConfigService {
             const updated = await prisma.appConfig.upsert({
                 where: { key: "cta_config" },
                 update: {
-                    value: validatedConfig,
+                    value: validatedConfig as unknown as Prisma.InputJsonValue,
                     version: { increment: 1 },
                 },
                 create: {
                     key: "cta_config",
-                    value: validatedConfig,
+                    value: validatedConfig as unknown as Prisma.InputJsonValue,
                     version: 1,
                 },
             });
@@ -88,7 +88,8 @@ export class ConfigService {
             // Invalidar cache
             this.invalidateCache("cta_config");
 
-            return updated.value as CTAConfig;
+            // Validar y retornar la configuración actualizada
+            return this.validateCTAConfig(updated.value);
         } catch (error) {
             console.error("[ConfigService] Error al actualizar CTA config:", error);
             throw new Error("Error al actualizar la configuración del CTA");
