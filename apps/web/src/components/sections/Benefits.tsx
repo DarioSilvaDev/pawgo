@@ -23,7 +23,7 @@ const benefits = [
 
 export function Benefits() {
   return (
-    <section className="bg-background-white py-20">
+    <section className="bg-background-light-gray py-20">
       <div className="container mx-auto px-4 max-w-6xl">
         <h2 className="text-3xl md:text-4xl font-bold text-text-black text-center mb-12">
           ¿Por qué elegir PawGo?
@@ -32,7 +32,7 @@ export function Benefits() {
           {benefits.map((benefit, index) => (
             <div
               key={index}
-              className="bg-background-light-gray p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow"
+              className="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow"
             >
               <h3 className="text-xl font-semibold text-text-black mb-3">
                 {benefit.title}

@@ -11,11 +11,13 @@ interface IEnvVars {
     JWT_SECRET: string;
     MERCADOPAGO_ACCESS_TOKEN: string;
     MERCADOPAGO_PUBLIC_KEY: string;
-    SMTP_USER: string;
-    SMTP_PASS: string;
     SMTP_HOST: string;
     SMTP_PORT: number;
-    SMTP_FROM: string;
+    SMTP_SOPORTE_USER: string;
+    SMTP_SOPORTE_PASS: string;
+    SMTP_VENTAS_USER: string;
+    SMTP_VENTAS_PASS: string;
+    RESEND_API_KEY: string;
     JOB_DISCOUNT_CODE_SCAN_CRON: string;
     B2_ENDPOINT: string;
     B2_REGION: string;
@@ -56,8 +58,6 @@ const envsSchema = z
         MERCADOPAGO_PUBLIC_KEY: z.string().min(1).describe("La clave pública de MercadoPago"),
 
         // SMTP
-        SMTP_USER: z.string().min(1).describe("El usuario de SMTP"),
-        SMTP_PASS: z.string().min(1).describe("La contraseña de SMTP"),
         SMTP_HOST: z.string().min(1).describe("El host de SMTP"),
         SMTP_PORT: z
             .string()
@@ -66,7 +66,12 @@ const envsSchema = z
             .default("465")
             .optional()
             .describe("El puerto de SMTP"),
-        SMTP_FROM: z.string().email().optional().describe("El email desde el que se enviarán los correos"),
+        SMTP_SOPORTE_USER: z.string().email().optional().describe("El email desde el que se enviarán los correos de soporte"),
+        SMTP_SOPORTE_PASS: z.string().min(1).describe("La contraseña de SMTP de soporte"),
+        SMTP_VENTAS_USER: z.string().email().optional().describe("El email desde el que se enviarán los correos de ventas"),
+        SMTP_VENTAS_PASS: z.string().min(1).describe("La contraseña de SMTP de ventas"),
+        // Resend
+        RESEND_API_KEY: z.string().min(1).describe("La clave de Resend"),
 
         // Jobs
         JOB_DISCOUNT_CODE_SCAN_CRON: z.string().default("0 */6 * * *").describe("El cron para el job de escaneo de códigos de descuento"),

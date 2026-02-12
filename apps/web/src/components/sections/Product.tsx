@@ -2,7 +2,7 @@ import Image from "next/image";
 
 export function Product() {
   return (
-    <section id="product" className="bg-background-light-gray py-20">
+    <section id="product" className="bg-white py-20">
       <div className="container mx-auto px-4 max-w-6xl">
         <div className="flex flex-col items-center gap-12">
           {/* Title */}
@@ -31,38 +31,34 @@ export function Product() {
             </div>
           </div>
 
-          {/* Video/GIF Container */}
-          <div className="w-full max-w-4xl">
-            <div className="relative aspect-video bg-gray-100 rounded-lg shadow-lg overflow-hidden border-2 border-gray-200">
-              {/* Placeholder para GIF/VIDEO */}
-              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-                <p className="text-text-dark-gray text-lg md:text-xl font-medium">
-                  GIF/VIDEO
-                </p>
-              </div>
-              {/* Aquí puedes agregar un componente <video> o <img> para GIF */}
-              {/* Ejemplo para video:
-              <video
-                className="w-full h-full object-cover"
-                controls
-                autoPlay
-                loop
-                muted
-                playsInline
-              >
-                <source src="/videos/producto.mp4" type="video/mp4" />
-              </video>
-              */}
-              {/* Ejemplo para GIF:
-              <Image
-                src="/images/producto.gif"
-                alt="PawGo Producto en acción"
-                fill
-                className="object-cover"
-              />
-              */}
-            </div>
-          </div>
+        </div>
+      </div>
+
+      {/* Video/GIF Container */}
+      <div className="w-full my-12">
+        <div className="relative aspect-video bg-gray-100 overflow-hidden border-y-2 border-gray-200">
+          {/* Placeholder para VIDEO */}
+          {/* <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+            <p className="text-text-dark-gray text-lg md:text-xl font-medium">
+              VIDEO
+            </p>
+          </div> */}
+          {/* Aquí puedes agregar un componente <video>*/}
+          <video
+            className="w-full h-full object-cover"
+            controls
+            autoPlay
+            loop
+            muted
+            playsInline
+          >
+            <source src="/videos/clideo_edited.mp4" type="video/mp4" />
+          </video>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 max-w-6xl">
+        <div className="flex flex-col items-center gap-12">
 
           {/* Size Guide */}
           <div className="w-full max-w-3xl">

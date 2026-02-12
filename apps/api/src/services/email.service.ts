@@ -1,41 +1,59 @@
 import nodemailer from "nodemailer";
 import { envs } from "../config/envs.js";
+import { Resend } from "resend";
+
+const resend = new Resend(envs.RESEND_API_KEY);
 
 // Email configuration from environment variables
 const SMTP_HOST = envs.SMTP_HOST;
 // Normalize SMTP_HOST - remove protocol if present (nodemailer only needs hostname)
 const SMTP_PORT = envs.SMTP_PORT;
-const SMTP_USER = envs.SMTP_USER;
-const SMTP_PASS = envs.SMTP_PASS;
-const SMTP_FROM = envs.SMTP_FROM || SMTP_USER || "noreply@pawgo.com";
+const SMTP_SOPORTE_USER = envs.SMTP_SOPORTE_USER;
+const SMTP_SOPORTE_PASS = envs.SMTP_SOPORTE_PASS;
+const SMTP_VENTAS_USER = envs.SMTP_VENTAS_USER;
+const SMTP_VENTAS_PASS = envs.SMTP_VENTAS_PASS;
+const SMTP_FROM = envs.SMTP_FROM || SMTP_SOPORTE_USER || "noreply@pawgo.com";
 const FRONTEND_URL = envs.FRONTEND_URL;
 
-// Create transporter
-const transporter = nodemailer.createTransport({
+// Create transporters
+const soporteTransporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: SMTP_PORT,
   secure: SMTP_PORT === 465, // true for 465, false for other ports
   auth:
-    SMTP_USER && SMTP_PASS
+    SMTP_SOPORTE_USER && SMTP_SOPORTE_PASS
       ? {
-        user: SMTP_USER,
-        pass: SMTP_PASS,
+        user: SMTP_SOPORTE_USER,
+        pass: SMTP_SOPORTE_PASS,
+      }
+      : undefined,
+});
+
+const ventasTransporter = nodemailer.createTransport({
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: SMTP_PORT === 465, // true for 465, false for other ports
+  auth:
+    SMTP_VENTAS_USER && SMTP_VENTAS_PASS
+      ? {
+        user: SMTP_VENTAS_USER,
+        pass: SMTP_VENTAS_PASS,
       }
       : undefined,
 });
 
 // Verify transporter configuration (async, don't block startup)
-if (SMTP_USER && SMTP_PASS) {
+if (SMTP_SOPORTE_USER && SMTP_SOPORTE_PASS) {
   // Validate SMTP_HOST format 
   // Verify asynchronously to avoid blocking server startup
   setImmediate(() => {
-    transporter
+    soporteTransporter
       .verify()
       .then(() => {
-        console.log(`✅ Email service configured and ready (SMTP: ${SMTP_HOST}:${SMTP_PORT})`);
+        console.log(`✅ Email service soporte configured and ready (SMTP: ${SMTP_HOST}:${SMTP_PORT})`);
       })
       .catch((error) => {
-        console.warn("⚠️ Email service configuration error:", error.message);
+        console.warn("⚠️ Email service soporte configuration error:", error.message);
         console.warn(
           "⚠️ Emails will not be sent until SMTP is properly configured"
         );
@@ -43,14 +61,35 @@ if (SMTP_USER && SMTP_PASS) {
       });
   });
 } else {
-  console.warn("⚠️ SMTP credentials not configured. Emails will not be sent.");
+  console.warn("⚠️ SMTP soporte credentials not configured. Emails will not be sent.");
+}
+
+if (SMTP_VENTAS_USER && SMTP_VENTAS_PASS) {
+  // Validate SMTP_HOST format 
+  // Verify asynchronously to avoid blocking server startup
+  setImmediate(() => {
+    ventasTransporter
+      .verify()
+      .then(() => {
+        console.log(`✅ Email service ventas configured and ready (SMTP: ${SMTP_HOST}:${SMTP_PORT})`);
+      })
+      .catch((error) => {
+        console.warn("⚠️ Email service ventas configuration error:", error.message);
+        console.warn(
+          "⚠️ Emails will not be sent until SMTP is properly configured"
+        );
+        // Don't throw - allow server to start even if email is misconfigured
+      });
+  });
+} else {
+  console.warn("⚠️ SMTP ventas credentials not configured. Emails will not be sent.");
 }
 
 /**
  * Generate email header with PawGo logo
  */
 function getEmailHeader(): string {
-  const logoUrl = `${process.env.PUBLIC_URL}/images/PawGo.svg`;
+  const logoUrl = `${FRONTEND_URL}/images/PawGo.svg`;
   return `
     <div class="header" style="background-color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
       <img src="${logoUrl}" alt="PawGo Logo" style="max-width: 200px; height: auto;" />
@@ -69,29 +108,59 @@ export class EmailService {
   /**
    * Send email
    */
-  async sendEmail(options: EmailOptions): Promise<void> {
-    if (!SMTP_USER || !SMTP_PASS) {
-      console.warn(
-        "⚠️ Email not sent (SMTP not configured):",
-        options.to,
-        options.subject
-      );
-      return;
-    }
-
+  private async sendViaResend(params: {
+    to: string;
+    subject: string;
+    html: string;
+  }): Promise<void> {
     try {
-      await transporter.sendMail({
-        from: `PawGo <${SMTP_FROM}>`,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text || options.html.replace(/<[^>]*>/g, ""), // Strip HTML for text version
+      const { data, error } = await resend.emails.send({
+        from: `PawGo <no-reply@noreply.pawgo-pet.com>`,
+        to: params.to,
+        subject: params.subject,
+        html: params.html,
+        replyTo: 'soporte@pawgo-pet.com',
+        tags: [{ name: 'category', value: 'transactional' }]
       });
-      console.log(`✅ Email sent to ${options.to}: ${options.subject}`);
+      if (error) {
+        console.error("❌ Error sending email:", error);
+        throw new Error(
+          `Resend error: ${error instanceof Error ? error.message : "Unknown error"}`
+        );
+      }
+      console.log(`✅ Email sent via Resend to ${params.to}: ${params.subject}`);
     } catch (error) {
-      console.error("❌ Error sending email:", error);
+      console.error("❌ Error sending email via Resend:", error);
       throw new Error(
-        `Failed to send email: ${error instanceof Error ? error.message : "Unknown error"
+        `Failed to send email via Resend: ${error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+  }
+
+  private async sendViaNodemailer(params: {
+    from: "soporte" | "ventas";
+    to: string;
+    subject: string;
+    html: string;
+  }): Promise<void> {
+    try {
+      const transporter = params.from === "soporte" ? soporteTransporter : ventasTransporter;
+
+      const fromEmail = params.from === "soporte" ? SMTP_SOPORTE_USER : SMTP_VENTAS_USER;
+
+      await transporter.sendMail({
+        from: `PawGo <${fromEmail}>`,
+        to: params.to,
+        subject: params.subject,
+        html: params.html,
+      });
+
+      console.log(`✅ Email sent via Nodemailer to ${params.to}: ${params.subject}`);
+    } catch (error) {
+      console.error("❌ Error sending email via Nodemailer:", error);
+      throw new Error(
+        `Failed to send email via Nodemailer: ${error instanceof Error ? error.message : "Unknown error"
         }`
       );
     }
@@ -145,7 +214,7 @@ export class EmailService {
       </html>
     `;
 
-    await this.sendEmail({
+    await this.sendViaResend({
       to: email,
       subject: "Verifica tu email - PawGo",
       html,
@@ -202,7 +271,7 @@ export class EmailService {
       </html>
     `;
 
-    await this.sendEmail({
+    await this.sendViaResend({
       to: email,
       subject: "Restablecer contraseña - PawGo",
       html,
@@ -263,7 +332,7 @@ export class EmailService {
       </html>
     `;
 
-    await this.sendEmail({
+    await this.sendViaResend({
       to: email,
       subject: "Nueva solicitud de pago - PawGo",
       html,
@@ -322,7 +391,7 @@ export class EmailService {
       </html>
     `;
 
-    await this.sendEmail({
+    await this.sendViaResend({
       to: email,
       subject: "Factura aprobada - PawGo",
       html,
@@ -379,7 +448,7 @@ export class EmailService {
       </html>
     `;
 
-    await this.sendEmail({
+    await this.sendViaResend({
       to: email,
       subject: "Factura rechazada - PawGo",
       html,
@@ -444,7 +513,7 @@ export class EmailService {
       </html>
     `;
 
-    await this.sendEmail({
+    await this.sendViaResend({
       to: email,
       subject: "Pago completado - PawGo",
       html,
@@ -502,7 +571,8 @@ export class EmailService {
       </html>
     `;
 
-    await this.sendEmail({
+    await this.sendViaNodemailer({
+      from: "ventas",
       to: email,
       subject: `Orden confirmada #${orderId.slice(0, 8)} - PawGo`,
       html,
@@ -570,7 +640,7 @@ export class EmailService {
     // Send to all admins (best-effort)
     await Promise.all(
       params.to.map((to) =>
-        this.sendEmail({
+        this.sendViaResend({
           to,
           subject: `Código expirado procesado: ${params.code}`,
           html,

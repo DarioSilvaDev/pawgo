@@ -48,7 +48,7 @@ export function Hero() {
   };
 
   return (
-    <section className="relative bg-background-white py-10 md:py-32">
+    <section className="relative bg-gradient-to-b from-primary-turquoise/5 to-white py-10 md:py-32">
       <div className="container mx-auto px-4 max-w-6xl">
         {/* Logo */}
         <div className="w-full flex justify-center mb-2 md:mb-12">
