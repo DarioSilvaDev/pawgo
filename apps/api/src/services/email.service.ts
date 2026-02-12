@@ -6,20 +6,33 @@ const resend = new Resend(envs.RESEND_API_KEY);
 
 // Email configuration from environment variables
 const SMTP_HOST = envs.SMTP_HOST;
-// Normalize SMTP_HOST - remove protocol if present (nodemailer only needs hostname)
 const SMTP_PORT = envs.SMTP_PORT;
 const SMTP_SOPORTE_USER = envs.SMTP_SOPORTE_USER;
 const SMTP_SOPORTE_PASS = envs.SMTP_SOPORTE_PASS;
 const SMTP_VENTAS_USER = envs.SMTP_VENTAS_USER;
 const SMTP_VENTAS_PASS = envs.SMTP_VENTAS_PASS;
-const SMTP_FROM = envs.SMTP_FROM || SMTP_SOPORTE_USER || "noreply@pawgo.com";
 const FRONTEND_URL = envs.FRONTEND_URL;
 
-// Create transporters
+// Create transporters with optimized configuration
 const soporteTransporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: SMTP_PORT,
-  secure: SMTP_PORT === 465, // true for 465, false for other ports
+  secure: SMTP_PORT === 465, // true for 465, false for 587
+  // Connection pooling for better performance
+  pool: true,
+  maxConnections: 5,
+  maxMessages: 100,
+  // Timeouts optimized for cloud environments
+  connectionTimeout: 30000, // 30 seconds (default is 2 minutes)
+  greetingTimeout: 30000,   // 30 seconds
+  socketTimeout: 60000,     // 60 seconds
+  // TLS configuration
+  tls: {
+    rejectUnauthorized: true,
+    minVersion: 'TLSv1.2' as const,
+  },
+  // Retry configuration
+  requireTLS: SMTP_PORT === 587, // Require TLS for port 587
   auth:
     SMTP_SOPORTE_USER && SMTP_SOPORTE_PASS
       ? {
@@ -32,7 +45,18 @@ const soporteTransporter = nodemailer.createTransport({
 const ventasTransporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: SMTP_PORT,
-  secure: SMTP_PORT === 465, // true for 465, false for other ports
+  secure: SMTP_PORT === 465,
+  pool: true,
+  maxConnections: 5,
+  maxMessages: 100,
+  connectionTimeout: 30000,
+  greetingTimeout: 30000,
+  socketTimeout: 60000,
+  tls: {
+    rejectUnauthorized: true,
+    minVersion: 'TLSv1.2' as const,
+  },
+  requireTLS: SMTP_PORT === 587,
   auth:
     SMTP_VENTAS_USER && SMTP_VENTAS_PASS
       ? {
@@ -42,47 +66,22 @@ const ventasTransporter = nodemailer.createTransport({
       : undefined,
 });
 
-// Verify transporter configuration (async, don't block startup)
+// Track verification status
+let soporteVerified = false;
+let ventasVerified = false;
+
+// Lazy verification - only verify when first email is sent
+// This prevents blocking server startup and handles transient network issues
 if (SMTP_SOPORTE_USER && SMTP_SOPORTE_PASS) {
-  // Validate SMTP_HOST format 
-  // Verify asynchronously to avoid blocking server startup
-  setImmediate(() => {
-    soporteTransporter
-      .verify()
-      .then(() => {
-        console.log(`✅ Email service soporte configured and ready (SMTP: ${SMTP_HOST}:${SMTP_PORT})`);
-      })
-      .catch((error) => {
-        console.warn("⚠️ Email service soporte configuration error:", error.message);
-        console.warn(
-          "⚠️ Emails will not be sent until SMTP is properly configured"
-        );
-        // Don't throw - allow server to start even if email is misconfigured
-      });
-  });
+  console.log(`📧 SMTP soporte configured (${SMTP_HOST}:${SMTP_PORT}) - will verify on first use`);
 } else {
-  console.warn("⚠️ SMTP soporte credentials not configured. Emails will not be sent.");
+  console.warn("⚠️ SMTP soporte credentials not configured. Manual emails will not be sent.");
 }
 
 if (SMTP_VENTAS_USER && SMTP_VENTAS_PASS) {
-  // Validate SMTP_HOST format 
-  // Verify asynchronously to avoid blocking server startup
-  setImmediate(() => {
-    ventasTransporter
-      .verify()
-      .then(() => {
-        console.log(`✅ Email service ventas configured and ready (SMTP: ${SMTP_HOST}:${SMTP_PORT})`);
-      })
-      .catch((error) => {
-        console.warn("⚠️ Email service ventas configuration error:", error.message);
-        console.warn(
-          "⚠️ Emails will not be sent until SMTP is properly configured"
-        );
-        // Don't throw - allow server to start even if email is misconfigured
-      });
-  });
+  console.log(`📧 SMTP ventas configured (${SMTP_HOST}:${SMTP_PORT}) - will verify on first use`);
 } else {
-  console.warn("⚠️ SMTP ventas credentials not configured. Emails will not be sent.");
+  console.warn("⚠️ SMTP ventas credentials not configured. Manual emails will not be sent.");
 }
 
 /**
@@ -138,16 +137,48 @@ export class EmailService {
     }
   }
 
+  /**
+   * Verify transporter connection (lazy verification)
+   */
+  private async verifyTransporter(
+    transporter: nodemailer.Transporter,
+    name: string,
+    isVerified: boolean
+  ): Promise<boolean> {
+    if (isVerified) return true;
+
+    try {
+      await transporter.verify();
+      console.log(`✅ ${name} transporter verified successfully`);
+      return true;
+    } catch (error) {
+      console.error(`❌ ${name} transporter verification failed:`, error);
+      throw new Error(
+        `SMTP ${name} not available: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
+  }
+
   private async sendViaNodemailer(params: {
     from: "soporte" | "ventas";
     to: string;
     subject: string;
     html: string;
   }): Promise<void> {
-    try {
-      const transporter = params.from === "soporte" ? soporteTransporter : ventasTransporter;
+    const transporter = params.from === "soporte" ? soporteTransporter : ventasTransporter;
+    const fromEmail = params.from === "soporte" ? SMTP_SOPORTE_USER : SMTP_VENTAS_USER;
+    const isVerified = params.from === "soporte" ? soporteVerified : ventasVerified;
 
-      const fromEmail = params.from === "soporte" ? SMTP_SOPORTE_USER : SMTP_VENTAS_USER;
+    try {
+      // Lazy verification on first use
+      if (!isVerified) {
+        const verified = await this.verifyTransporter(transporter, params.from, isVerified);
+        if (params.from === "soporte") {
+          soporteVerified = verified;
+        } else {
+          ventasVerified = verified;
+        }
+      }
 
       await transporter.sendMail({
         from: `PawGo <${fromEmail}>`,
@@ -156,12 +187,19 @@ export class EmailService {
         html: params.html,
       });
 
-      console.log(`✅ Email sent via Nodemailer to ${params.to}: ${params.subject}`);
+      console.log(`✅ Email sent via Nodemailer (${params.from}) to ${params.to}`);
     } catch (error) {
-      console.error("❌ Error sending email via Nodemailer:", error);
+      console.error(`❌ Error sending email via Nodemailer (${params.from}):`, error);
+
+      // Reset verification status on error to retry next time
+      if (params.from === "soporte") {
+        soporteVerified = false;
+      } else {
+        ventasVerified = false;
+      }
+
       throw new Error(
-        `Failed to send email via Nodemailer: ${error instanceof Error ? error.message : "Unknown error"
-        }`
+        `Failed to send email via Nodemailer: ${error instanceof Error ? error.message : "Unknown error"}`
       );
     }
   }
