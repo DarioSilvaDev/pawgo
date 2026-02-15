@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { miCorreoConfig } from "../../config/micorreo.config.js";
 import { prisma } from "../../config/prisma.client.js";
 import { MiCorreoAuthService } from "./micorreo-auth.service.js";
@@ -48,7 +49,7 @@ export class MiCorreoService {
                     documentId: data.documentId,
                     phone: data.phone,
                     cellPhone: data.cellPhone,
-                    address: data.address,
+                    address: data.address as unknown as Prisma.InputJsonValue,
                     leadId: leadId || null,
                 },
             });
@@ -171,7 +172,7 @@ export class MiCorreoService {
                     height: request.dimensions.height,
                     width: request.dimensions.width,
                     length: request.dimensions.length,
-                    rates: response.rates,
+                    rates: response.rates as unknown as Prisma.InputJsonValue,
                     validTo: new Date(response.validTo),
                 },
             });
