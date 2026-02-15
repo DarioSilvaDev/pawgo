@@ -5,11 +5,11 @@ const benefits = [
   },
   {
     title: 'Ajuste cómodo y seguro',
-    description: 'Diseñado para distribuir la presión de manera uniforme, protegiendo el cuello de tu perro.',
+    description: 'Diseñado para distribuir la presión de manera uniforme, y cuidar la comodidad de nuestros angelitos con cola.',
   },
   {
     title: 'Fácil de usar',
-    description: 'Sistema intuitivo que permite controlar la longitud de la correa con un solo botón.',
+    description: 'Sistema retráctil automático que regula la longitud de la correa y se bloquea ante tirones bruscos.',
   },
   {
     title: 'Duradero y resistente',

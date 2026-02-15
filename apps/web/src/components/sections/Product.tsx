@@ -21,7 +21,7 @@ export function Product() {
           <div className="w-full max-w-2xl">
             <div className="relative aspect-square bg-white rounded-lg shadow-lg overflow-hidden">
               <Image
-                src="/images/producto.png"
+                src="/images/producto.jpg"
                 alt="PawGo Arnés para perros con correa retráctil integrada"
                 fill
                 className="object-contain"
@@ -71,7 +71,7 @@ export function Product() {
               </p>
               <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-gray-50">
                 <Image
-                  src="/images/medidas.png"
+                  src="/images/size_ok.jpg"
                   alt="Guía de tallas PawGo - Medidas para perros pequeños, medianos, grandes y extra grandes"
                   fill
                   className="object-contain"

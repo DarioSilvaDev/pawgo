@@ -78,7 +78,7 @@ export function BuyIntentModal({ onClose, mode = "BUY_INTENT" }: BuyIntentModalP
         </h2>
         <p className="text-text-dark-gray mb-6">
           PawGo estará disponible muy pronto. Dejanos tus datos y te avisaremos
-          en cuanto esté disponible en Argentina.
+          en cuanto esté disponible.
         </p> */}
 
         <h2
@@ -90,12 +90,13 @@ export function BuyIntentModal({ onClose, mode = "BUY_INTENT" }: BuyIntentModalP
         <p className="text-text-dark-gray mb-6">
           {mode === "BUY_INTENT" ? (
             <>
-              PawGo llega muy pronto a Argentina. Registrate y obtené un{" "}
-              <strong>20% OFF de lanzamiento</strong> por ser de los primeros en enterarte.
+              PawGo llega muy pronto. Registrate ahora y asegurá tu{" "}
+              <strong>15% OFF de lanzamiento</strong>. Solo para las primeras 50 unidades.
+              🔥 ¡No te quedes afuera!
             </>
           ) : (
             <>
-              PawGo estará disponible muy pronto. Dejanos tus datos y te avisaremos en cuanto tengamos <strong>stock disponible</strong> en Argentina.
+              PawGo estará disponible muy pronto. Dejanos tus datos y te avisaremos en cuanto tengamos <strong>stock disponible</strong>.
             </>
           )}
         </p>
@@ -233,7 +234,7 @@ export function BuyIntentModal({ onClose, mode = "BUY_INTENT" }: BuyIntentModalP
               </p>
               <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-gray-50">
                 <Image
-                  src="/images/medidas.png"
+                  src="/images/size_ok.jpg"
                   alt="Guía de tallas PawGo - Medidas para perros pequeños, medianos, grandes y extra grandes"
                   fill
                   className="object-contain"

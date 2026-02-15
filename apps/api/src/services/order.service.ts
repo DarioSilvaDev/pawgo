@@ -8,19 +8,24 @@ import {
   prismaNumber,
   getEffectivePrice,
 } from "../utils/decimal.js";
+import { MiCorreoService } from "./micorreo/micorreo.service.js";
+import { shippingConfig } from "../config/shipping.config.js";
 
 import { prisma } from "../config/prisma.client.js";
 
 export class OrderService {
   private discountCodeService: DiscountCodeService;
   private commissionService: CommissionService;
+  private miCorreoService: MiCorreoService;
 
   constructor(
     discountCodeService: DiscountCodeService,
-    commissionService: CommissionService
+    commissionService: CommissionService,
+    miCorreoService: MiCorreoService
   ) {
     this.discountCodeService = discountCodeService;
     this.commissionService = commissionService;
+    this.miCorreoService = miCorreoService;
   }
 
   /**
@@ -540,5 +545,94 @@ export class OrderService {
       shippingCost: prismaNumber(prismaDecimal(order.shippingCost)),
       total: prismaNumber(order.total),
     };
+  }
+
+  /**
+   * Calculate and register real shipping cost from MiCorreo
+   * Customer always pays $0, but we track the real cost for analytics
+   */
+  async calculateShippingCost(orderId: string) {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { lead: true },
+    });
+
+    if (!order) {
+      throw new Error("Orden no encontrada");
+    }
+
+    if (!order.shippingAddress) {
+      console.warn(`⚠️ [Shipping] Orden ${orderId} no tiene dirección de envío`);
+      return null;
+    }
+
+    const shippingAddress = order.shippingAddress as any;
+
+    try {
+      // Get or create MiCorreo customer
+      const miCorreoCustomer = await prisma.miCorreoCustomer.findFirst({
+        where: { documentId: '33722435' },
+      });
+
+      // If no customer exists, we'll need to register one
+      // For now, we'll use a generic customer ID or skip
+      if (!miCorreoCustomer) {
+        console.warn(`⚠️ [Shipping] No se encontró cliente MiCorreo para orden ${orderId}`);
+        // You might want to create a customer here or use a default one
+        return null;
+      }
+
+      // Get shipping quote from MiCorreo with standard package dimensions
+      const quote = await this.miCorreoService.getRates({
+        customerId: miCorreoCustomer.customerId,
+        postalCodeOrigin: shippingConfig.originPostalCode,
+        postalCodeDestination: shippingAddress.postalCode,
+        dimensions: shippingConfig.standardPackage,
+      });
+
+      if (!quote.rates || quote.rates.length === 0) {
+        console.warn(`⚠️ [Shipping] No se encontraron tarifas para orden ${orderId}`);
+        return null;
+      }
+
+      // Select the most economical rate
+      const selectedRate = quote.rates.find(el => el.productType === "Correo Argentino Clasico" && el.deliveredType === "D"
+      );
+      if (!selectedRate) {
+        console.warn(`⚠️ [Shipping] No se encontró tarifa específica para orden ${orderId}`);
+        return null;
+      }
+
+      // Update order with shipping information
+      await prisma.order.update({
+        where: { id: orderId },
+        data: {
+          miCorreoShippingCost: selectedRate.price,
+          miCorreoShippingQuote: quote as any,
+          miCorreoCustomerId: miCorreoCustomer.customerId,
+          miCorreoDeliveryType: selectedRate.deliveredType,
+          miCorreoProductType: selectedRate.productType,
+          shippingSubsidyAmount: selectedRate.price, // Full subsidy
+          // shippingCost remains 0 for customer
+        },
+      });
+
+      console.log(`✅ [Shipping] Costo calculado para orden ${orderId}: $${selectedRate.price} (subsidiado)`);
+
+      return {
+        realCost: selectedRate.price,
+        customerCost: 0,
+        subsidyAmount: selectedRate.price,
+        deliveryTime: {
+          min: selectedRate.deliveryTimeMin,
+          max: selectedRate.deliveryTimeMax,
+        },
+        productName: selectedRate.productName,
+      };
+    } catch (error) {
+      console.error(`❌ [Shipping] Error calculando costo para orden ${orderId}:`, error);
+      // Don't fail the order if shipping calculation fails
+      return null;
+    }
   }
 }

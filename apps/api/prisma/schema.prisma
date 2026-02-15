@@ -71,7 +71,8 @@ model Lead {
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
-  orders Order[]
+  orders            Order[]
+  miCorreoCustomer  MiCorreoCustomer?
 
   @@index([createdAt])
   @@index([email])
@@ -331,12 +332,22 @@ model Order {
   status          OrderStatus @default(pending)
   subtotal        Decimal     @db.Decimal(10, 2) // Antes de descuento
   discount        Decimal     @default(0) @db.Decimal(10, 2) // Descuento aplicado
-  shippingCost    Decimal     @default(0) @db.Decimal(10, 2) // Costo de envío
+  shippingCost    Decimal     @default(0) @db.Decimal(10, 2) // Costo de envío (siempre $0 para cliente)
   total           Decimal     @db.Decimal(10, 2) // Subtotal - discount + shippingCost
   currency        String      @default("ARS")
   shippingAddress Json? // Dirección de envío
   shippingMethod  String? // Método de envío
   itemsSnapshot   Json        @map("items") // Snapshot histórico (fuente de verdad histórica)
+  
+  // MiCorreo - Tracking de costos reales de envío
+  miCorreoShippingCost    Decimal? @db.Decimal(10, 2) // Costo real del envío en MiCorreo
+  miCorreoShippingQuote   Json? // Cotización completa de MiCorreo
+  miCorreoCustomerId      String? // ID del cliente en MiCorreo
+  miCorreoTrackingNumber  String? // Número de seguimiento
+  miCorreoDeliveryType    String? // "D" (Domicilio) o "S" (Sucursal)
+  miCorreoProductType     String? // Tipo de producto (ej: "CP")
+  shippingSubsidyAmount   Decimal @default(0) @db.Decimal(10, 2) // Monto subsidiado (= miCorreoShippingCost)
+  
   createdAt       DateTime    @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime    @updatedAt @db.Timestamptz(3)
 
@@ -523,4 +534,98 @@ model AppConfig {
   @@index([key])
   @@index([createdAt])
   @@map("app_config")
+}
+
+// ============================================
+// MiCorreo Integration
+// ============================================
+
+// Clientes registrados en MiCorreo (Correo Argentino)
+model MiCorreoCustomer {
+  id         String   @id @default(cuid())
+  leadId     String?  @unique // Relación con Lead (opcional)
+  customerId String   @unique // ID del cliente en MiCorreo
+  email      String   @unique
+  firstName  String
+  lastName   String
+  documentType String // "DNI" o "CUIT"
+  documentId String
+  phone      String?
+  cellPhone  String?
+  address    Json? // Dirección completa
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  rateCaches MiCorreoRateCache[]
+
+  @@index([customerId])
+  @@index([email])
+  @@index([leadId])
+  @@index([createdAt])
+  @@map("micorreo_customers")
+}
+
+// Cache de cotizaciones de MiCorreo
+model MiCorreoRateCache {
+  id                     String   @id @default(cuid())
+  customerId             String // ID del cliente en MiCorreo
+  miCorreoCustomerId     String? // Relación con MiCorreoCustomer
+  postalCodeOrigin       String
+  postalCodeDestination  String
+  weight                 Int // en gramos
+  height                 Int // en cm
+  width                  Int // en cm
+  length                 Int // en cm
+  rates                  Json // Array de cotizaciones
+  validTo                DateTime @db.Timestamptz(3) // Fecha de expiración de la cotización
+  createdAt              DateTime @default(now()) @db.Timestamptz(3)
+
+
+  miCorreoCustomer MiCorreoCustomer? @relation(fields: [miCorreoCustomerId], references: [id], onDelete: SetNull)
+
+  @@index([customerId])
+  @@index([miCorreoCustomerId])
+  @@index([validTo])
+  @@index([postalCodeOrigin, postalCodeDestination])
+  @@index([createdAt])
+  @@map("micorreo_rate_caches")
+}
+
+// Analytics de envíos - Agregación diaria por ubicación
+model ShippingAnalytics {
+  id                    String   @id @default(cuid())
+  
+  // Período
+  date                  DateTime @db.Date
+  
+  // Ubicación
+  provinceCode          String
+  provinceName          String
+  city                  String?
+  postalCode            String
+  
+  // Métricas
+  totalOrders           Int      @default(0)
+  totalShippingCost     Decimal  @default(0) @db.Decimal(10, 2)
+  averageShippingCost   Decimal  @default(0) @db.Decimal(10, 2)
+  totalSubsidyAmount    Decimal  @default(0) @db.Decimal(10, 2)
+  
+  // Tipos de envío
+  homeDeliveryCount     Int      @default(0)
+  branchDeliveryCount   Int      @default(0)
+  
+  // Tiempos de entrega promedio
+  avgDeliveryTimeMin    Int?
+  avgDeliveryTimeMax    Int?
+  
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+  
+  @@unique([date, postalCode])
+  @@index([date])
+  @@index([provinceCode])
+  @@index([postalCode])
+  @@index([createdAt])
+  @@map("shipping_analytics")
 }

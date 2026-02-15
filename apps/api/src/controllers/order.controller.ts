@@ -64,6 +64,14 @@ export function createOrderController(
       try {
         const body = createOrderSchema.parse(request.body);
         const order = await orderService.create(body as CreateOrderDto);
+
+        // Calculate shipping cost in background (doesn't affect response)
+        if (order.shippingAddress) {
+          orderService.calculateShippingCost(order.id).catch((error) => {
+            console.error(`Error calculating shipping for order ${order.id}:`, error);
+          });
+        }
+
         reply.status(201).send(order);
       } catch (error) {
         if (error instanceof z.ZodError) {

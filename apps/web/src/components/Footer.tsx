@@ -15,7 +15,7 @@ export function Footer() {
                         <div className="flex gap-6">
                             {/* Instagram */}
                             <Link
-                                href="https://instagram.com/pawgo-pet"
+                                href="https://instagram.com/pawgo.pet"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-white hover:text-primary-turquoise transition-colors"
@@ -41,7 +41,7 @@ export function Footer() {
 
                             {/* Facebook */}
                             <Link
-                                href="https://facebook.com/pawgo-pet"
+                                href="https://www.facebook.com/share/14W1adqVQFx"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-white hover:text-primary-turquoise transition-colors"

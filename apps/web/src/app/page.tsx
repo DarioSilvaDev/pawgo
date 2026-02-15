@@ -2,7 +2,6 @@ import { Hero } from "@/components/sections/Hero";
 import { Product } from "@/components/sections/Product";
 import { Benefits } from "@/components/sections/Benefits";
 import { LaunchStatus } from "@/components/sections/LaunchStatus";
-// import { LeadForm } from '@/components/sections/LeadForm';
 import { PageViewTracker } from "@/components/PageViewTracker";
 
 export default function Home() {
@@ -13,7 +12,6 @@ export default function Home() {
       <Product />
       <Benefits />
       <LaunchStatus />
-      {/* <LeadForm /> */}
     </main>
   );
 }

@@ -191,12 +191,12 @@ export function CTAConfigForm() {
                                 onChange={(e) => setConfig({ ...config, modalType: e.target.value as any })}
                                 className="input-field"
                             >
-                                <option value="BUY_INTENT">Lanzamiento (20% descuento)</option>
+                                <option value="BUY_INTENT">Lanzamiento (15% OFF - Primeras 50 unidades)</option>
                                 <option value="WAITLIST">Lista de Espera (Standard)</option>
                             </select>
                             <p className="mt-2 text-xs text-gray-500 flex items-start gap-1">
                                 <span className="inline-block p-1 bg-blue-50 text-blue-600 rounded shrink-0">💡</span>
-                                El formulario de &quot;Lanzamiento&quot; está optimizado para capturar leads ofreciendo beneficios.
+                                El formulario de &quot;Lanzamiento&quot; crea urgencia con descuento limitado a las primeras 50 unidades.
                             </p>
                         </div>
                     )}

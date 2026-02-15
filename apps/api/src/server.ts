@@ -18,6 +18,7 @@ import { analyticsRoutes } from "./routes/analytics.routes.js";
 import { productRoutes } from "./routes/product.routes.js";
 import { geoRoutes } from "./routes/geo.routes.js";
 import { configRoutes } from "./routes/config.routes.js";
+import { miCorreoRoutes } from "./routes/micorreo/index.js";
 import { TokenService } from "./auth/services/token.service.js";
 import { AuthService } from "./auth/services/auth.service.js";
 import { DiscountCodeService } from "./services/discount-code.service.js";
@@ -27,6 +28,7 @@ import { MercadoPagoService } from "./services/mercadopago.service.js";
 import { InfluencerPaymentService } from "./services/influencer-payment.service.js";
 import { StorageService } from "./services/storage.service.js";
 import { AnalyticsService } from "./services/analytics.service.js";
+import { MiCorreoService } from "./services/micorreo/micorreo.service.js";
 import multipart from "@fastify/multipart";
 import { LeadService } from "./services/lead.service.js";
 import { LeadController } from "./controllers/lead.controller.js";
@@ -81,7 +83,8 @@ const authService = new AuthService(tokenService);
 const leadService = new LeadService();
 const discountCodeService = new DiscountCodeService();
 const commissionService = new CommissionService();
-const orderService = new OrderService(discountCodeService, commissionService);
+const miCorreoService = new MiCorreoService();
+const orderService = new OrderService(discountCodeService, commissionService, miCorreoService);
 const mercadoPagoService = new MercadoPagoService();
 const storageService = new StorageService();
 const influencerPaymentService = new InfluencerPaymentService(storageService);
@@ -171,6 +174,10 @@ await fastify.register(geoRoutes, {
 await fastify.register(configRoutes, {
   prefix: "/api",
   tokenService,
+});
+await fastify.register(miCorreoRoutes, {
+  prefix: "/api",
+  miCorreoService,
 });
 
 // Note: Files are now served from Backblaze B2, not from local filesystem

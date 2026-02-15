@@ -9,119 +9,119 @@ import React, { useState } from "react";
 import ProvinceCitySelect from "@/components/ProvinceCitySelect";
 
 export default function ProvinceCityDemoPage() {
-    const [selectedData, setSelectedData] = useState<{
-        provinciaId: string | null;
-        provinciaNombre: string | null;
-        ciudadId: string | null;
-        ciudadNombre: string | null;
-    }>({
-        provinciaId: null,
-        provinciaNombre: null,
-        ciudadId: null,
-        ciudadNombre: null,
-    });
+  const [selectedData, setSelectedData] = useState<{
+    provinciaId: string | null;
+    provinciaNombre: string | null;
+    ciudadId: string | null;
+    ciudadNombre: string | null;
+  }>({
+    provinciaId: null,
+    provinciaNombre: null,
+    ciudadId: null,
+    ciudadNombre: null,
+  });
 
-    const handleProvinceChange = (id: string | null, nombre: string | null) => {
-        console.log("Provincia seleccionada:", { id, nombre });
-        setSelectedData((prev) => ({
-            ...prev,
-            provinciaId: id,
-            provinciaNombre: nombre,
-            ciudadId: null,
-            ciudadNombre: null,
-        }));
-    };
+  const handleProvinceChange = (id: string | null, nombre: string | null) => {
+    console.log("Provincia seleccionada:", { id, nombre });
+    setSelectedData((prev) => ({
+      ...prev,
+      provinciaId: id,
+      provinciaNombre: nombre,
+      ciudadId: null,
+      ciudadNombre: null,
+    }));
+  };
 
-    const handleCityChange = (id: string | null, nombre: string | null) => {
-        console.log("Ciudad seleccionada:", { id, nombre });
-        setSelectedData((prev) => ({
-            ...prev,
-            ciudadId: id,
-            ciudadNombre: nombre,
-        }));
-    };
+  const handleCityChange = (id: string | null, nombre: string | null) => {
+    console.log("Ciudad seleccionada:", { id, nombre });
+    setSelectedData((prev) => ({
+      ...prev,
+      ciudadId: id,
+      ciudadNombre: nombre,
+    }));
+  };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        alert(
-            `Datos seleccionados:\n\nProvincia: ${selectedData.provinciaNombre || "N/A"} (ID: ${selectedData.provinciaId || "N/A"})\nCiudad: ${selectedData.ciudadNombre || "N/A"} (ID: ${selectedData.ciudadId || "N/A"})`
-        );
-    };
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    alert(
+      `Datos seleccionados:\n\nProvincia: ${selectedData.provinciaNombre || "N/A"} (ID: ${selectedData.provinciaId || "N/A"})\nCiudad: ${selectedData.ciudadNombre || "N/A"} (ID: ${selectedData.ciudadId || "N/A"})`
+    );
+  };
 
-    return (
-        <div className="demo-page">
-            <div className="container">
-                <header className="header">
-                    <h1>Selector de Provincia y Ciudad</h1>
-                    <p className="subtitle">
-                        Componente reutilizable para seleccionar ubicación en Argentina
-                    </p>
-                </header>
+  return (
+    <div className="demo-page">
+      <div className="container">
+        <header className="header">
+          <h1>Selector de Provincia y Ciudad</h1>
+          <p className="subtitle">
+            Componente reutilizable para seleccionar ubicación
+          </p>
+        </header>
 
-                <div className="demo-section">
-                    <h2>Ejemplo Básico</h2>
-                    <p className="description">
-                        Componente con configuración estándar, ideal para formularios de
-                        checkout o registro.
-                    </p>
+        <div className="demo-section">
+          <h2>Ejemplo Básico</h2>
+          <p className="description">
+            Componente con configuración estándar, ideal para formularios de
+            checkout o registro.
+          </p>
 
-                    <form onSubmit={handleSubmit} className="demo-form">
-                        <ProvinceCitySelect
-                            onProvinceChange={handleProvinceChange}
-                            onCityChange={handleCityChange}
-                            required
-                            showLabels
-                        />
+          <form onSubmit={handleSubmit} className="demo-form">
+            <ProvinceCitySelect
+              onProvinceChange={handleProvinceChange}
+              onCityChange={handleCityChange}
+              required
+              showLabels
+            />
 
-                        <button type="submit" className="submit-button">
-                            Continuar
-                        </button>
-                    </form>
+            <button type="submit" className="submit-button">
+              Continuar
+            </button>
+          </form>
 
-                    {/* Información de selección actual */}
-                    {(selectedData.provinciaId || selectedData.ciudadId) && (
-                        <div className="selection-info">
-                            <h3>Selección Actual:</h3>
-                            <div className="info-grid">
-                                {selectedData.provinciaId && (
-                                    <div className="info-item">
-                                        <span className="info-label">Provincia:</span>
-                                        <span className="info-value">
-                                            {selectedData.provinciaNombre} (ID: {selectedData.provinciaId})
-                                        </span>
-                                    </div>
-                                )}
-                                {selectedData.ciudadId && (
-                                    <div className="info-item">
-                                        <span className="info-label">Ciudad:</span>
-                                        <span className="info-value">
-                                            {selectedData.ciudadNombre} (ID: {selectedData.ciudadId})
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </div>
+          {/* Información de selección actual */}
+          {(selectedData.provinciaId || selectedData.ciudadId) && (
+            <div className="selection-info">
+              <h3>Selección Actual:</h3>
+              <div className="info-grid">
+                {selectedData.provinciaId && (
+                  <div className="info-item">
+                    <span className="info-label">Provincia:</span>
+                    <span className="info-value">
+                      {selectedData.provinciaNombre} (ID: {selectedData.provinciaId})
+                    </span>
+                  </div>
+                )}
+                {selectedData.ciudadId && (
+                  <div className="info-item">
+                    <span className="info-label">Ciudad:</span>
+                    <span className="info-value">
+                      {selectedData.ciudadNombre} (ID: {selectedData.ciudadId})
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
-                <div className="demo-section">
-                    <h2>Características</h2>
-                    <ul className="features-list">
-                        <li>✅ Carga dinámica de ciudades según provincia seleccionada</li>
-                        <li>✅ Estados de loading y error manejados automáticamente</li>
-                        <li>✅ Cancelación de requests al cambiar de provincia</li>
-                        <li>✅ Diseño responsive (mobile-first)</li>
-                        <li>✅ Accesibilidad (ARIA labels, estados disabled)</li>
-                        <li>✅ Integrable con Formik, React Hook Form, etc.</li>
-                        <li>✅ Tipado fuerte con TypeScript</li>
-                        <li>✅ Caching en backend (24h provincias, 12h ciudades)</li>
-                    </ul>
-                </div>
+        <div className="demo-section">
+          <h2>Características</h2>
+          <ul className="features-list">
+            <li>✅ Carga dinámica de ciudades según provincia seleccionada</li>
+            <li>✅ Estados de loading y error manejados automáticamente</li>
+            <li>✅ Cancelación de requests al cambiar de provincia</li>
+            <li>✅ Diseño responsive (mobile-first)</li>
+            <li>✅ Accesibilidad (ARIA labels, estados disabled)</li>
+            <li>✅ Integrable con Formik, React Hook Form, etc.</li>
+            <li>✅ Tipado fuerte con TypeScript</li>
+            <li>✅ Caching en backend (24h provincias, 12h ciudades)</li>
+          </ul>
+        </div>
 
-                <div className="demo-section">
-                    <h2>Uso en Código</h2>
-                    <pre className="code-block">
-                        <code>{`import ProvinceCitySelect from "@/components/ProvinceCitySelect";
+        <div className="demo-section">
+          <h2>Uso en Código</h2>
+          <pre className="code-block">
+            <code>{`import ProvinceCitySelect from "@/components/ProvinceCitySelect";
 
 function CheckoutForm() {
   const handleProvinceChange = (id, nombre) => {
@@ -144,11 +144,11 @@ function CheckoutForm() {
     </form>
   );
 }`}</code>
-                    </pre>
-                </div>
-            </div>
+          </pre>
+        </div>
+      </div>
 
-            <style jsx>{`
+      <style jsx>{`
         .demo-page {
           min-height: 100vh;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -324,6 +324,6 @@ function CheckoutForm() {
           }
         }
       `}</style>
-        </div>
-    );
+    </div>
+  );
 }

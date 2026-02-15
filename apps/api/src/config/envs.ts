@@ -25,6 +25,11 @@ interface IEnvVars {
     B2_KEY_ID: string;
     B2_APP_KEY: string;
     B2_BUCKET_ID: string;
+
+    MICORREO_BASE_URL: string;
+    MICORREO_USERNAME: string;
+    MICORREO_PASSWORD: string;
+    MICORREO_TOKEN_CACHE_ENABLED: string;
 }
 // Schema de validación de variables de entorno
 const envsSchema = z
@@ -83,6 +88,12 @@ const envsSchema = z
         B2_KEY_ID: z.string().describe("Alias para el ID de aplicación (Key ID)"),
         B2_APP_KEY: z.string().describe("La clave de aplicación de Backblaze B2 (alias de B2_APPLICATION_KEY)"),
         B2_BUCKET_ID: z.string().describe("El ID del bucket de Backblaze B2"),
+
+        // MiCorreo API (Correo Argentino)
+        MICORREO_BASE_URL: z.string().url().describe("La URL base de la API de MiCorreo"),
+        MICORREO_USERNAME: z.string().min(1).describe("El usuario para autenticación en MiCorreo"),
+        MICORREO_PASSWORD: z.string().min(1).describe("La contraseña para autenticación en MiCorreo"),
+        MICORREO_TOKEN_CACHE_ENABLED: z.string().default("true").describe("Habilitar cache de tokens JWT de MiCorreo"),
     })
     .passthrough(); // Permite propiedades adicionales (variables de entorno del sistema)
 
