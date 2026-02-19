@@ -36,6 +36,7 @@
     "fastify": "^4.24.3",
     "luxon": "^3.7.2",
     "mercadopago": "^2.11.0",
+    "nanoid": "^5.1.6",
     "nodemailer": "^7.0.12",
     "pg-boss": "^12.5.4",
     "qrcode": "^1.5.4",

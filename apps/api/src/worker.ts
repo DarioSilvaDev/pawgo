@@ -1,6 +1,7 @@
 import { PgBoss } from "pg-boss";
 import { registerDiscountCodeExpirationScan } from "./jobs/discount-code-expiration.scan.js";
 import { registerDiscountCodeSettlementWorker } from "./jobs/discount-code-expiration.settle.js";
+import { registerLeadNotificationWorker } from "./jobs/lead-notification.job.js";
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -22,6 +23,7 @@ async function main() {
 
   await registerDiscountCodeExpirationScan(boss);
   await registerDiscountCodeSettlementWorker(boss);
+  await registerLeadNotificationWorker(boss);
 
   console.log("[worker] jobs registered");
 }

@@ -3,6 +3,7 @@ import { CreateLeadDto, Lead, DogSize, EventType } from '../../../../packages/sh
 
 import { prisma } from "../config/prisma.client.js";
 import { eventService } from './event.service.js';
+import { emailService } from './email.service.js';
 
 export class LeadService {
   async create(data: CreateLeadDto): Promise<Lead> {
@@ -29,6 +30,19 @@ export class LeadService {
     } catch (error) {
       // Log error but don't fail lead creation
       console.error('Failed to track LEAD_SUBMITTED event:', error);
+    }
+
+    // Enviar email de bienvenida al lead
+    try {
+      await emailService.sendLeadWelcomeEmail(
+        lead.email,
+        lead.name || undefined,
+        lead.dogSize || undefined
+      );
+      console.log(`✅ Welcome email sent to lead: ${lead.email}`);
+    } catch (error) {
+      // Log error but don't fail lead creation
+      console.error('Failed to send welcome email to lead:', error);
     }
 
     return {

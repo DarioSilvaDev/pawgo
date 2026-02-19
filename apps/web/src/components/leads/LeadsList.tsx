@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getLeads, deleteLead, exportLeadsToCSV, type Lead } from "@/lib/lead";
+import { notifyLeadsAvailability } from "@/lib/api";
 import { useConfirmDialog } from "@/components/ui/useConfirmDialog";
 import { useToast } from "@/components/ui/useToast";
 
 export function LeadsList() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notifying, setNotifying] = useState(false);
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const { showToast, ToastView } = useToast();
   const [search, setSearch] = useState("");
@@ -71,8 +73,7 @@ export function LeadsList() {
       link.setAttribute("href", url);
       link.setAttribute(
         "download",
-        `leads_${new Date().toISOString().split("T")[0]}-size-${
-          dogSizeFilter || "all"
+        `leads_${new Date().toISOString().split("T")[0]}-size-${dogSizeFilter || "all"
         }.csv`
       );
       link.style.visibility = "hidden";
@@ -85,6 +86,36 @@ export function LeadsList() {
         type: "error",
         message: err instanceof Error ? err.message : "Error al exportar CSV",
       });
+    }
+  };
+
+  const handleNotifyAvailability = async () => {
+    const ok = await confirm({
+      title: "Notificar disponibilidad",
+      message: `¿Enviar notificación de disponibilidad a todos los leads no notificados? Cada lead recibirá un código de descuento único válido por 24 horas.`,
+      confirmText: "Enviar Notificaciones",
+      cancelText: "Cancelar",
+    });
+    if (!ok) return;
+
+    try {
+      setNotifying(true);
+      const result = await notifyLeadsAvailability();
+      showToast({
+        type: "success",
+        message: `✅ ${result.count} notificaciones enviadas exitosamente`,
+        durationMs: 5000,
+      });
+      // Reload leads to see updated notification status
+      await loadLeads();
+    } catch (err) {
+      showToast({
+        type: "error",
+        message: err instanceof Error ? err.message : "Error al enviar notificaciones",
+        durationMs: 6000,
+      });
+    } finally {
+      setNotifying(false);
     }
   };
 
@@ -139,6 +170,25 @@ export function LeadsList() {
             className="px-4 py-2 bg-primary-turquoise text-white rounded-lg hover:bg-primary-turquoise/90 transition-colors"
           >
             Exportar CSV
+          </button>
+          <button
+            onClick={handleNotifyAvailability}
+            disabled={notifying || leads.length === 0}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {notifying ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                Enviando...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Notificar Disponibilidad
+              </>
+            )}
           </button>
         </div>
       </div>

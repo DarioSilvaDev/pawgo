@@ -68,14 +68,22 @@ model Lead {
   dni         String?
   phoneNumber String?
   dogSize     String?
+  
+  // Lead notification tracking
+  notifiedAt                DateTime? @db.Timestamptz(3)
+  notificationSentCount     Int       @default(0)
+  reservationDiscountCodeId String?   @unique
+  
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
-  orders            Order[]
-  miCorreoCustomer  MiCorreoCustomer?
+  orders                    Order[]
+  miCorreoCustomer          MiCorreoCustomer?
+  reservationDiscountCode   DiscountCode? @relation("LeadReservationCode", fields: [reservationDiscountCodeId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([email])
+  @@index([notifiedAt])
   @@map("leads")
 }
 
@@ -280,8 +288,8 @@ model Influencer {
 
 model DiscountCode {
   id            String       @id @default(cuid())
-  code          String       @unique // Ej: "INFLUENCER10"
-  influencerId  String
+  code          String       @unique // Ej: "INFLUENCER10" or "LEAD-XXXXXXXX"
+  influencerId  String?      // Optional for lead reservation codes
   discountType  DiscountType
   discountValue Decimal      @db.Decimal(10, 2) // 10.00 para 10% o monto fijo (según discountType)
   minPurchase   Decimal?     @db.Decimal(10, 2) // Compra mínima para usar el código
@@ -290,16 +298,19 @@ model DiscountCode {
   isActive      Boolean      @default(true)
   validFrom     DateTime     @default(now()) @db.Timestamptz(3)
   validUntil    DateTime?    @db.Timestamptz(3)
+  codeType      String       @default("influencer") // "influencer" | "lead_reservation"
   createdAt     DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
 
-  influencer  Influencer               @relation(fields: [influencerId], references: [id], onDelete: Cascade)
-  orders      Order[]
-  commissions Commission[]
-  settlements DiscountCodeSettlement[]
+  influencer      Influencer?              @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  orders          Order[]
+  commissions     Commission[]
+  settlements     DiscountCodeSettlement[]
+  leadReservation Lead?                    @relation("LeadReservationCode")
 
   @@index([code])
   @@index([influencerId])
+  @@index([codeType])
   @@index([createdAt])
   @@map("discount_codes")
 }

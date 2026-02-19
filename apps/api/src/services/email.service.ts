@@ -559,6 +559,171 @@ export class EmailService {
   }
 
   /**
+   * Send welcome email to new lead
+   */
+  async sendLeadWelcomeEmail(
+    email: string,
+    name?: string,
+    dogSize?: string
+  ): Promise<void> {
+    const dogSizeText = dogSize
+      ? {
+        small: "pequeño",
+        medium: "mediano",
+        large: "grande",
+        extra_large: "extra grande",
+      }[dogSize] || ""
+      : "";
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .header img { max-width: 200px; height: auto; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+            .success-box { background-color: #d4edda; border-left: 4px solid #28a745; padding: 12px; margin: 20px 0; }
+            .info-box { background-color: #e7f3ff; border-left: 4px solid #00CED1; padding: 12px; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+            .paw-emoji { font-size: 24px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            ${getEmailHeader()}
+            <div class="content">
+              <h2>🐾 ¡Gracias por tu interés en PawGo!</h2>
+              <p>Hola${name ? ` ${name}` : ""},</p>
+              <div class="success-box">
+                <p style="margin: 0;"><strong>✅ Tu solicitud ha sido recibida exitosamente</strong></p>
+              </div>
+              <p>Nos emociona saber que quieres formar parte de la familia PawGo. ${dogSizeText
+        ? `Hemos registrado tu interés en el pretal de tamaño <strong>${dogSizeText}</strong>.`
+        : "Hemos registrado tu interés en nuestros pretal."
+      }</p>
+              <div class="info-box">
+                <p style="margin: 0;">📧 Te avisaremos por email cuando tu producto esté disponible.</p>
+              </div>
+              <p>Estamos trabajando arduamente para ofrecerte la mejor experiencia y los mejores productos para tu mejor amigo de cuatro patas.</p>
+              <p><strong>Gracias por confiar en nosotros.</strong> 💙</p>
+              <p>Si tienes alguna pregunta mientras tanto, no dudes en contactarnos respondiendo a este email.</p>
+              <p style="margin-top: 30px;">¡Nos vemos pronto!</p>
+              <p><strong>El equipo de PawGo</strong> 🐕</p>
+            </div>
+            <div class="footer">
+              <p>© 2026 PawGo. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendViaResend({
+      to: email,
+      subject: "¡Gracias por tu interés en PawGo! 🐾",
+      html,
+    });
+  }
+
+  /**
+   * Send product availability notification to lead with unique discount code (24h validity)
+   */
+  async sendProductAvailabilityNotification(
+    email: string,
+    discountCode: string,
+    name?: string,
+    dogSize?: string
+  ): Promise<void> {
+    const shopUrl = `${FRONTEND_URL}/shop`;
+    const expirationDate = new Date();
+    expirationDate.setHours(expirationDate.getHours() + 24);
+
+    const dogSizeText = dogSize
+      ? {
+        small: "pequeño",
+        medium: "mediano",
+        large: "grande",
+        extra_large: "extra grande",
+      }[dogSize] || ""
+      : "";
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .header img { max-width: 200px; height: auto; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+            .success-box { background-color: #d4edda; border-left: 4px solid #28a745; padding: 12px; margin: 20px 0; }
+            .code-box { background-color: #e7f3ff; border: 2px dashed #00CED1; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center; }
+            .discount-code { font-size: 24px; font-weight: bold; color: #00CED1; letter-spacing: 2px; }
+            .warning-box { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 20px 0; }
+            .button { display: inline-block; padding: 12px 24px; background-color: #00CED1; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: bold; }
+            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            ${getEmailHeader()}
+            <div class="content">
+              <h2>🎉 ¡Tu producto ya está disponible!</h2>
+              <p>Hola${name ? ` ${name}` : ""},</p>
+              <div class="success-box">
+                <p style="margin: 0;"><strong>¡Tenemos excelentes noticias! Los productos que esperabas ya están disponibles.</strong></p>
+              </div>
+              <p>Nos complace informarte que nuestros productos ${dogSizeText
+        ? `para perros de tamaño <strong>${dogSizeText}</strong> `
+        : ""
+      }ya están listos para ti.</p>
+              <div class="code-box">
+                <p style="margin: 0 0 10px 0;"><strong>🎁 Tu código de descuento exclusivo</strong></p>
+                <p class="discount-code">${discountCode}</p>
+                <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">Copia este código y úsalo al finalizar tu compra para obtener un <strong>15% de descuento</strong></p>
+              </div>
+              <div class="warning-box">
+                <p style="margin: 0;"><strong>⏰ Válido por 24 horas</strong></p>
+                <p style="margin: 5px 0 0 0;">Tu código y reserva son válidos hasta el <strong>${expirationDate.toLocaleDateString(
+        "es-AR",
+        {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }
+      )}</strong>. ¡No te lo pierdas!</p>
+              </div>
+              <div style="text-align: center;">
+                <a href="${shopUrl}" class="button">Comprar Ahora 🛒</a>
+              </div>
+              <p>Gracias por tu paciencia y por confiar en PawGo. Estamos emocionados de que finalmente puedas disfrutar de nuestros productos junto a tu mejor amigo. 🐾</p>
+              <p style="margin-top: 30px;">¡Te esperamos!</p>
+              <p><strong>El equipo de PawGo</strong> 💙</p>
+            </div>
+            <div class="footer">
+              <p>© 2026 PawGo. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendViaResend({
+      to: email,
+      subject: `🎉 ¡Tu producto PawGo ya está disponible! Código: ${discountCode}`,
+      html,
+    });
+  }
+
+  /**
    * Send order confirmation to customer
    */
   async sendOrderConfirmation(

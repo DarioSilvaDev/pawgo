@@ -19,6 +19,7 @@ import { productRoutes } from "./routes/product.routes.js";
 import { geoRoutes } from "./routes/geo.routes.js";
 import { configRoutes } from "./routes/config.routes.js";
 import { miCorreoRoutes } from "./routes/micorreo/index.js";
+import { leadNotificationRoutes } from "./routes/lead-notification.routes.js";
 import { TokenService } from "./auth/services/token.service.js";
 import { AuthService } from "./auth/services/auth.service.js";
 import { DiscountCodeService } from "./services/discount-code.service.js";
@@ -32,7 +33,9 @@ import { MiCorreoService } from "./services/micorreo/micorreo.service.js";
 import multipart from "@fastify/multipart";
 import { LeadService } from "./services/lead.service.js";
 import { LeadController } from "./controllers/lead.controller.js";
+import { LeadNotificationController } from "./controllers/lead-notification.controller.js";
 import { UploadController } from "./controllers/upload.controller.js";
+import { PgBoss } from "pg-boss";
 
 const fastify = Fastify({
   logger: {
@@ -95,6 +98,21 @@ const uploadController = new UploadController(
   storageService,
   influencerPaymentService
 );
+
+// Initialize pg-boss for background jobs
+const boss = new PgBoss({
+  connectionString: process.env.DATABASE_URL!,
+  application_name: "pawgo-api",
+});
+
+boss.on("error", (err) => {
+  console.error("[api] pg-boss error:", err);
+});
+
+await boss.start();
+console.log("[api] pg-boss started");
+
+const leadNotificationController = new LeadNotificationController(boss);
 
 // Initialize storage directories
 await storageService.initialize();
@@ -178,6 +196,11 @@ await fastify.register(configRoutes, {
 await fastify.register(miCorreoRoutes, {
   prefix: "/api",
   miCorreoService,
+});
+await fastify.register(leadNotificationRoutes, {
+  prefix: "/api/admin/leads",
+  controller: leadNotificationController,
+  tokenService,
 });
 
 // Note: Files are now served from Backblaze B2, not from local filesystem
