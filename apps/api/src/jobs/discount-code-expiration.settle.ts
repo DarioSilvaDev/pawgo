@@ -42,6 +42,10 @@ export async function registerDiscountCodeSettlementWorker(boss: PgBoss) {
               return { status: "not_found" as const };
             }
 
+            if (!code.influencer) {
+              return { status: "not_found" as const };
+            }
+
             // If already settled, exit idempotently
             const existing = await txAny.discountCodeSettlement.findUnique({
               where: { discountCodeId },
@@ -77,20 +81,20 @@ export async function registerDiscountCodeSettlementWorker(boss: PgBoss) {
             let influencerPaymentId: string | undefined;
 
             if (commissionsCount > 0 && totalAmount.gt(0)) {
-              const paymentMethod = code.influencer.paymentMethod || "transfer";
+              const paymentMethod = code.influencer!.paymentMethod || "transfer";
 
               const payment = await tx.influencerPayment.create({
                 data: {
-                  influencerId: code.influencerId,
+                  influencerId: code.influencerId!,
                   // Prisma accepts number here; round to 2 decimals for financial safety.
                   totalAmount: Number(totalAmount.toFixed(2)),
                   currency: "ARS",
                   paymentMethod,
                   status: "pending",
-                  accountNumber: code.influencer.accountNumber,
-                  cvu: code.influencer.cvu,
-                  bankName: code.influencer.bankName,
-                  mercadopagoEmail: code.influencer.mercadopagoEmail,
+                  accountNumber: code.influencer!.accountNumber,
+                  cvu: code.influencer!.cvu,
+                  bankName: code.influencer!.bankName,
+                  mercadopagoEmail: code.influencer!.mercadopagoEmail,
                 },
               });
 
@@ -132,8 +136,8 @@ export async function registerDiscountCodeSettlementWorker(boss: PgBoss) {
               status: "settled" as const,
               settlementId: settlement.id,
               code: code.code,
-              influencerName: code.influencer.name,
-              influencerEmail: code.influencer.auth?.email,
+              influencerName: code.influencer!.name,
+              influencerEmail: code.influencer!.auth?.email ?? undefined,
               totalAmount: totalAmount.toFixed(2),
               commissionsCount,
               influencerPaymentId,

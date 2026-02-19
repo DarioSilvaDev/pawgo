@@ -50,7 +50,7 @@ export class CommissionService {
     // Create commission
     const commission = await prisma.commission.create({
       data: {
-        influencerId: discountCode.influencerId,
+        influencerId: discountCode.influencerId!,
         orderId: order.id,
         discountCodeId: discountCode.id,
         orderTotal: prismaNumber(prismaDecimal(order.total)),

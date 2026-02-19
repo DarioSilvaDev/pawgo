@@ -135,6 +135,7 @@ export class DiscountCodeService {
 
     return {
       ...discountCode,
+      influencerId: discountCode.influencerId!,
       discountType: discountCode.discountType as "percentage" | "fixed",
       discountValue: Number(discountCode.discountValue),
       minPurchase: discountCode.minPurchase
@@ -143,9 +144,9 @@ export class DiscountCodeService {
       maxUses: discountCode.maxUses ?? undefined,
       validUntil: discountCode.validUntil ?? undefined,
       influencer: {
-        id: discountCode.influencer.id,
-        name: discountCode.influencer.name,
-        email: discountCode.influencer.auth?.email || "",
+        id: discountCode.influencer!.id,
+        name: discountCode.influencer!.name,
+        email: discountCode.influencer!.auth?.email || "",
       },
     };
   }
@@ -197,15 +198,16 @@ export class DiscountCodeService {
 
     return codes.map((code) => ({
       ...code,
+      influencerId: code.influencerId!,
       discountType: code.discountType as "percentage" | "fixed",
       discountValue: Number(code.discountValue),
       minPurchase: code.minPurchase ? Number(code.minPurchase) : undefined,
       maxUses: code.maxUses ?? undefined,
       validUntil: code.validUntil ?? undefined,
       influencer: {
-        id: code.influencer.id,
-        name: code.influencer.name,
-        email: code.influencer.auth?.email || "",
+        id: code.influencer!.id,
+        name: code.influencer!.name,
+        email: code.influencer!.auth?.email || "",
       },
     }));
   }
@@ -237,15 +239,16 @@ export class DiscountCodeService {
 
     return {
       ...code,
+      influencerId: code.influencerId!,
       discountType: code.discountType as "percentage" | "fixed",
       discountValue: Number(code.discountValue),
       minPurchase: code.minPurchase ? Number(code.minPurchase) : undefined,
       maxUses: code.maxUses ?? undefined,
       validUntil: code.validUntil ?? undefined,
       influencer: {
-        id: code.influencer.id,
-        name: code.influencer.name,
-        email: code.influencer.auth?.email || "",
+        id: code.influencer!.id,
+        name: code.influencer!.name,
+        email: code.influencer!.auth?.email || "",
       },
     };
   }
@@ -277,6 +280,7 @@ export class DiscountCodeService {
 
     return {
       ...discountCode,
+      influencerId: discountCode.influencerId!,
       discountType: discountCode.discountType as "percentage" | "fixed",
       discountValue: Number(discountCode.discountValue),
       minPurchase: discountCode.minPurchase
@@ -285,9 +289,9 @@ export class DiscountCodeService {
       maxUses: discountCode.maxUses ?? undefined,
       validUntil: discountCode.validUntil ?? undefined,
       influencer: {
-        id: discountCode.influencer.id,
-        name: discountCode.influencer.name,
-        email: discountCode.influencer.auth?.email || "",
+        id: discountCode.influencer!.id,
+        name: discountCode.influencer!.name,
+        email: discountCode.influencer!.auth?.email || "",
       },
     };
   }
@@ -396,6 +400,7 @@ export class DiscountCodeService {
 
     return {
       ...updatedCode,
+      influencerId: updatedCode.influencerId!,
       discountType: updatedCode.discountType as "percentage" | "fixed",
       discountValue: Number(updatedCode.discountValue),
       minPurchase: updatedCode.minPurchase
@@ -404,9 +409,9 @@ export class DiscountCodeService {
       maxUses: updatedCode.maxUses ?? undefined,
       validUntil: updatedCode.validUntil ?? undefined,
       influencer: {
-        id: updatedCode.influencer.id,
-        name: updatedCode.influencer.name,
-        email: updatedCode.influencer.auth?.email || "",
+        id: updatedCode.influencer!.id,
+        name: updatedCode.influencer!.name,
+        email: updatedCode.influencer!.auth?.email || "",
       },
     };
   }
