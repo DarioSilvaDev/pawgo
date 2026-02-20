@@ -105,7 +105,7 @@ export class OrderService {
       const { email, name, lastName, dni, phoneNumber } = data.customerInfo;
 
       // Try to find existing lead by email
-      const existingLead = await prisma.lead.findUnique({
+      const existingLead = await prisma.lead.findFirst({
         where: { email },
       });
 

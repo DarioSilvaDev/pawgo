@@ -7,7 +7,7 @@ import { emailService } from './email.service.js';
 
 export class LeadService {
   async create(data: CreateLeadDto): Promise<Lead> {
-    const existingLead = await prisma.lead.findUnique({
+    const existingLead = await prisma.lead.findFirst({
       where: {
         email: data.email,
         dogSize: data.dogSize,
