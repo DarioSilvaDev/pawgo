@@ -1,9 +1,10 @@
 import { PgBoss, Job } from "pg-boss";
 import { PrismaClient } from "@prisma/client";
 import { emailService } from "../services/email.service.js";
-import { discountCodeGeneratorService } from "../services/discount-code-generator.service.js";
+import { DiscountCodeService } from "../services/discount-code.service.js";
 
 const prisma = new PrismaClient();
+const discountCodeService = new DiscountCodeService();
 
 export const JOB_LEAD_NOTIFICATION = "lead.notify-availability";
 
@@ -40,13 +41,13 @@ export async function registerLeadNotificationWorker(boss: PgBoss) {
                         continue;
                     }
 
-                    // Generate unique discount code for this lead
-                    const discountCode = await discountCodeGeneratorService.generateLeadReservationCode(leadId);
+                    // Generate unique discount code for this lead using unified service
+                    const discountCode = await discountCodeService.createLeadReservationCode(leadId);
 
                     // Send email with discount code
                     await emailService.sendProductAvailabilityNotification(
                         lead.email,
-                        discountCode,
+                        discountCode.code,
                         lead.name || undefined,
                         lead.dogSize || undefined
                     );
@@ -60,9 +61,9 @@ export async function registerLeadNotificationWorker(boss: PgBoss) {
                         },
                     });
 
-                    console.log(`✅ Availability notification sent to lead: ${lead.email} with code: ${discountCode}`);
+                    console.log(`✅ Availability notification sent to lead: ${lead.email} with code: ${discountCode.code}`);
 
-                    results.push({ status: "sent" as const, leadId, email: lead.email, discountCode });
+                    results.push({ status: "sent" as const, leadId, email: lead.email, discountCode: discountCode.code });
 
                     // Add delay between emails to respect rate limits (except for the last one)
                     if (i < jobs.length - 1) {

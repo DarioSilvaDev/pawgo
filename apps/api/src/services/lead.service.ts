@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import { CreateLeadDto, Lead, DogSize, EventType } from '../../../../packages/shared/dist/index.js';
+import { CreateLeadDto, Lead, DogSize, EventType } from '../shared/index.js';
 
 import { prisma } from "../config/prisma.client.js";
 import { eventService } from './event.service.js';
@@ -7,6 +7,17 @@ import { emailService } from './email.service.js';
 
 export class LeadService {
   async create(data: CreateLeadDto): Promise<Lead> {
+    const existingLead = await prisma.lead.findUnique({
+      where: {
+        email: data.email,
+        dogSize: data.dogSize,
+      },
+    });
+
+    if (existingLead) {
+      throw new Error('Lead already registered for this dog size');
+    }
+
     const lead = await prisma.lead.create({
       data: {
         email: data.email,

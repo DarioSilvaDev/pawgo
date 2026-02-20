@@ -2,8 +2,8 @@
 // Este servicio se implementará cuando se active el flujo de pagos real
 
 // import { PrismaClient } from '@prisma/client';
-// import { CreatePaymentDto, Payment } from '@pawgo/shared';
-// import { PaymentStatus } from '@pawgo/shared';
+// import { CreatePaymentDto, Payment } from '../shared/index.js';
+// import { PaymentStatus } from '../shared/index.js';
 //
 // const prisma = new PrismaClient();
 //

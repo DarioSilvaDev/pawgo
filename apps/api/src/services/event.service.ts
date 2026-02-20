@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { CreateEventDto, Event, EventType } from "../../../../packages/shared/dist/index.js";
+import { CreateEventDto, Event, EventType } from "../shared/index.js";
 
 const prisma = new PrismaClient();
 

@@ -1,5 +1,5 @@
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
-import { Order, OrderItem } from "../../../../packages/shared/dist/index.js";
+import { Order, OrderItem } from "../shared/index.js";
 import { envs } from "../config/envs.js";
 
 const ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN || "";

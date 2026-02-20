@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { EventType } from "@pawgo/shared";
+import { EventType } from "@/shared";
 import { trackEvent } from "@/lib/analytics";
 import { submitLead } from "@/lib/api";
 import { useToast } from "@/components/ui/useToast";

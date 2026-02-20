@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { InfluencerPaymentsList } from "@/components/admin/InfluencerPaymentsList";
 import { CreateInfluencerPaymentForm } from "@/components/admin/CreateInfluencerPaymentForm";
-import { InfluencerPaymentWithDetails } from "@pawgo/shared";
+import { InfluencerPaymentWithDetails } from "@/shared";
 import { getInfluencerPayments } from "@/lib/influencer-payment";
 
 export default function InfluencerPaymentsPage() {

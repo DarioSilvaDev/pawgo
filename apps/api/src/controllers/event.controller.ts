@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { eventService } from '../services/event.service.js';
-import { CreateEventDto, EventType } from '../../../../packages/shared/dist/index.js';
+import { CreateEventDto, EventType } from '../shared/index.js';
 import { z } from 'zod';
 
 const createEventSchema = z.object({
@@ -21,7 +21,7 @@ export const eventController = {
     try {
       const body = createEventSchema.parse(request.body);
       const event = await eventService.create(body as CreateEventDto);
-      
+
       reply.status(201).send(event);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -31,7 +31,7 @@ export const eventController = {
         });
         return;
       }
-      
+
       throw error;
     }
   },
@@ -47,12 +47,12 @@ export const eventController = {
   async getCounts(request: FastifyRequest, reply: FastifyReply) {
     try {
       const query = getCountsQuerySchema.parse(request.query);
-      
+
       // Si se proporciona rango de fechas
       if (query.startDate && query.endDate) {
         const startDate = new Date(query.startDate);
         const endDate = new Date(query.endDate);
-        
+
         if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
           reply.status(400).send({
             error: 'Invalid date format. Use YYYY-MM-DD',
@@ -94,7 +94,7 @@ export const eventController = {
 
       // Contadores para fecha específica (o hoy por defecto)
       const targetDate = query.date ? new Date(query.date) : new Date();
-      
+
       if (isNaN(targetDate.getTime())) {
         reply.status(400).send({
           error: 'Invalid date format. Use YYYY-MM-DD',
@@ -124,7 +124,7 @@ export const eventController = {
         });
         return;
       }
-      
+
       throw error;
     }
   },

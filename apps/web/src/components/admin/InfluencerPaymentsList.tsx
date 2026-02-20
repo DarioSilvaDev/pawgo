@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { InfluencerPaymentWithDetails } from "@pawgo/shared";
+import { InfluencerPaymentWithDetails } from "@/shared";
 import Link from "next/link";
 
 interface InfluencerPaymentsListProps {

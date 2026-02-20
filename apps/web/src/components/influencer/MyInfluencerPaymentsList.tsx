@@ -1,6 +1,6 @@
 "use client";
 
-import { InfluencerPaymentWithDetails } from "@pawgo/shared";
+import { InfluencerPaymentWithDetails } from "@/shared";
 import Link from "next/link";
 
 interface MyInfluencerPaymentsListProps {

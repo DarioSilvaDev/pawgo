@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma, OrderStatus } from "@prisma/client";
-import { CreateOrderDto, OrderItem } from "../../../../packages/shared/dist/index.js";
+import { CreateOrderDto, OrderItem } from "../shared/index.js";
 import { DiscountCodeService } from "./discount-code.service.js";
 import { CommissionService } from "./commission.service.js";
 import { emailService } from "./email.service.js";

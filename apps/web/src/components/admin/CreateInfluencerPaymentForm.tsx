@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { CreateInfluencerPaymentDto } from "@pawgo/shared";
+import { CreateInfluencerPaymentDto } from "@/shared";
 import { createInfluencerPayment, getPendingCommissions } from "@/lib/influencer-payment";
 import { getAllInfluencers } from "@/lib/influencer";
 import { useToast } from "@/components/ui/useToast";

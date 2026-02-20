@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { MyInfluencerPaymentsList } from "@/components/influencer/MyInfluencerPaymentsList";
-import { InfluencerPaymentWithDetails } from "@pawgo/shared";
+import { InfluencerPaymentWithDetails } from "@/shared";
 import { getMyInfluencerPayments } from "@/lib/influencer-payment";
 
 export default function MyInfluencerPaymentsPage() {

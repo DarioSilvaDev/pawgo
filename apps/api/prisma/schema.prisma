@@ -53,6 +53,11 @@ enum DiscountType {
   fixed      @map("fixed")
 }
 
+enum DiscountCodeType {
+  influencer       @map("influencer")
+  lead_reservation @map("lead_reservation")
+}
+
 enum InfluencerInvoiceStatus {
   pending  @map("pending")
   uploaded @map("uploaded")
@@ -62,7 +67,7 @@ enum InfluencerInvoiceStatus {
 
 model Lead {
   id          String   @id @default(cuid())
-  email       String   @unique
+  email       String
   name        String?
   lastName    String?
   dni         String?
@@ -287,20 +292,22 @@ model Influencer {
 }
 
 model DiscountCode {
-  id            String       @id @default(cuid())
-  code          String       @unique // Ej: "INFLUENCER10" or "LEAD-XXXXXXXX"
-  influencerId  String?      // Optional for lead reservation codes
-  discountType  DiscountType
-  discountValue Decimal      @db.Decimal(10, 2) // 10.00 para 10% o monto fijo (según discountType)
-  minPurchase   Decimal?     @db.Decimal(10, 2) // Compra mínima para usar el código
-  maxUses       Int? // Límite de usos (null = ilimitado)
-  usedCount     Int          @default(0)
-  isActive      Boolean      @default(true)
-  validFrom     DateTime     @default(now()) @db.Timestamptz(3)
-  validUntil    DateTime?    @db.Timestamptz(3)
-  codeType      String       @default("influencer") // "influencer" | "lead_reservation"
-  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
+  id              String           @id @default(cuid())
+  code            String           @unique // Ej: "INFLUENCER10" or nanoid para leads
+  influencerId    String?          // Optional for lead reservation codes
+  discountType    DiscountType
+  discountValue   Decimal          @db.Decimal(10, 2) // 10.00 para 10% o monto fijo (según discountType)
+  commissionType  DiscountType?    // Tipo de comisión del influencer (null para lead codes)
+  commissionValue Decimal?         @db.Decimal(10, 2) // Valor de comisión (null para lead codes)
+  minPurchase     Decimal?         @db.Decimal(10, 2) // Compra mínima para usar el código
+  maxUses         Int?             // Límite de usos (null = ilimitado)
+  usedCount       Int              @default(0)
+  isActive        Boolean          @default(true)
+  validFrom       DateTime         @default(now()) @db.Timestamptz(3)
+  validUntil      DateTime?        @db.Timestamptz(3)
+  codeType        DiscountCodeType @default(influencer)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
 
   influencer      Influencer?              @relation(fields: [influencerId], references: [id], onDelete: Cascade)
   orders          Order[]

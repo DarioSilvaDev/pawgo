@@ -121,6 +121,7 @@ export function LeadsList() {
 
   const getDogSizeLabel = (size?: string) => {
     const labels: Record<string, string> = {
+      extra_small: "Extra Pequeño",
       small: "Pequeño",
       medium: "Mediano",
       large: "Grande",

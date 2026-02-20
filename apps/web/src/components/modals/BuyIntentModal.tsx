@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { DogSize } from "@pawgo/shared";
+import { DogSize } from "@/shared";
 import { submitLead } from "@/lib/api";
 import { useToast } from "@/components/ui/useToast";
 
@@ -174,6 +174,7 @@ export function BuyIntentModal({ onClose, mode = "BUY_INTENT" }: BuyIntentModalP
               aria-required="true"
             >
               <option value="">Selecciona un tamaño</option>
+              <option value={DogSize.EXTRA_SMALL}>Extra Pequeño</option>
               <option value={DogSize.SMALL}>Pequeño</option>
               <option value={DogSize.MEDIUM}>Mediano</option>
               <option value={DogSize.LARGE}>Grande</option>

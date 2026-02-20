@@ -1,5 +1,5 @@
 import { fetchAPI } from "./auth";
-import { CreateDiscountCodeDto, UpdateDiscountCodeDto } from "@pawgo/shared";
+import { CreateDiscountCodeDto, UpdateDiscountCodeDto, LeadDiscountConfig } from "@/shared";
 
 export interface DiscountCodeValidation {
   valid: boolean;
@@ -53,11 +53,12 @@ function buildQuery(params: Record<string, string | number | boolean | undefined
 }
 
 export const discountCodeAPI = {
-  async getAll(filters?: { influencerId?: string; isActive?: boolean; code?: string }) {
+  async getAll(filters?: { influencerId?: string; isActive?: boolean; code?: string; codeType?: string }) {
     const query = buildQuery({
       influencerId: filters?.influencerId,
       isActive: filters?.isActive,
       code: filters?.code,
+      codeType: filters?.codeType,
     });
     const res = await fetchAPI(`/discount-codes${query}`);
     if (!res.ok) {
@@ -99,6 +100,29 @@ export const discountCodeAPI = {
       const error = await res.json().catch(() => ({ error: "Error al eliminar código" }));
       throw new Error(error.error || `HTTP error! status: ${res.status}`);
     }
+  },
+
+  // ─── Lead Discount Config ────────────────────
+
+  async getLeadDiscountConfig(): Promise<LeadDiscountConfig> {
+    const res = await fetchAPI(`/discount-codes/lead-config`);
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: "Error al cargar configuración" }));
+      throw new Error(error.error || `HTTP error! status: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async updateLeadDiscountConfig(config: LeadDiscountConfig): Promise<LeadDiscountConfig> {
+    const res = await fetchAPI(`/discount-codes/lead-config`, {
+      method: "PUT",
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: "Error al guardar configuración" }));
+      throw new Error(error.error || `HTTP error! status: ${res.status}`);
+    }
+    return res.json();
   },
 };
 

@@ -7,7 +7,7 @@ import { GeoController } from "../controllers/geo.controller.js";
 import { GeoService } from "../services/geo.service.js";
 import { createAuthMiddleware, requireRole } from "../auth/middleware/auth.middleware.js";
 import { TokenService } from "../auth/services/token.service.js";
-import { UserRole } from "../../../../packages/shared/dist/index.js";
+import { UserRole } from "../shared/index.js";
 
 export async function geoRoutes(
     fastify: FastifyInstance,

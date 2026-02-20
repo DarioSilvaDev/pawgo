@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { CTAConfig, CTAAction } from "@pawgo/shared";
+import { CTAConfig, CTAAction } from "@/shared";
 import { getAdminCTAConfig, updateCTAConfig } from "@/lib/config";
 import { useToast } from "@/components/ui/useToast";
 

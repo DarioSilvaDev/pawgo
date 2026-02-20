@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { DiscountCodesList } from "@/components/admin/DiscountCodesList";
 import { CreateDiscountCodeForm } from "@/components/admin/CreateDiscountCodeForm";
+import { LeadDiscountConfigForm } from "@/components/admin/LeadDiscountConfigForm";
 import { Toast } from "@/components/ui/Toast";
 
 export default function DiscountCodesPage() {
@@ -52,7 +53,7 @@ export default function DiscountCodesPage() {
               Códigos de Descuento
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              Gestiona los códigos de descuento para influencers
+              Gestiona los códigos de descuento para influencers y leads
             </p>
           </div>
           {!showCreateForm && (
@@ -84,6 +85,9 @@ export default function DiscountCodesPage() {
 
         {/* Codes List */}
         <DiscountCodesList refreshKey={refreshKey} />
+
+        {/* Lead Discount Config */}
+        <LeadDiscountConfigForm />
       </div>
     </DashboardLayout>
   );

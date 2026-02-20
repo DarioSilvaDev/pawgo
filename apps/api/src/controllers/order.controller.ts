@@ -5,12 +5,12 @@ import {
   ApplyDiscountCodeDto,
   Order,
   OrderItem,
-} from "../../../../packages/shared/dist/index.js";
+} from "../shared/index.js";
 import { OrderService } from "../services/order.service.js";
 import { MercadoPagoService } from "../services/mercadopago.service.js";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { prismaDecimal, prismaNumber } from "../utils/decimal.js";
-import { Address, OrderStatus } from "../../../../packages/shared/dist/index.js";
+import { Address, OrderStatus } from "../shared/index.js";
 
 const prisma = new PrismaClient();
 

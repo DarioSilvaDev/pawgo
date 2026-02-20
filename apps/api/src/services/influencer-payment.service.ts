@@ -3,7 +3,7 @@ import {
   CreateInfluencerPaymentDto,
   UpdateInfluencerPaymentDto,
   InfluencerPaymentWithDetails,
-} from "../../../../packages/shared/dist/index.js";
+} from "../shared/index.js";
 import { emailService } from "./email.service.js";
 import { prismaDecimal, prismaNumber, n } from "../utils/decimal.js";
 import { StorageService } from "./storage.service.js";

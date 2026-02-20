@@ -6,7 +6,7 @@ import {
   RegisterDto,
   AuthResponse,
   UserRole,
-} from "@pawgo/shared";
+} from "@/shared";
 import {
   authAPI,
   getUser,

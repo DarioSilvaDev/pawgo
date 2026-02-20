@@ -1,5 +1,5 @@
 import { fetchAPI } from "./auth";
-import { EventType } from "@pawgo/shared";
+import { EventType } from "@/shared";
 
 export interface DashboardStats {
   totalSales: number;

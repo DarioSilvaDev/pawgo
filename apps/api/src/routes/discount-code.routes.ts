@@ -3,58 +3,34 @@ import { createDiscountCodeController } from "../controllers/discount-code.contr
 import { DiscountCodeService } from "../services/discount-code.service.js";
 import { createAuthMiddleware, requireRole } from "../auth/middleware/auth.middleware.js";
 import { TokenService } from "../auth/services/token.service.js";
-import { UserRole } from "../../../../packages/shared/dist/index.js";
+import { UserRole } from "../shared/index.js";
 
 export async function discountCodeRoutes(
-  fastify: FastifyInstance,
+  app: FastifyInstance,
   options: { discountCodeService: DiscountCodeService; tokenService: TokenService }
 ) {
   const { discountCodeService, tokenService } = options;
-  const discountCodeController = createDiscountCodeController(discountCodeService);
+  const controller = createDiscountCodeController(discountCodeService);
   const authenticate = createAuthMiddleware(tokenService);
+  const requireAdmin = requireRole(UserRole.ADMIN);
 
-  // Public route - validate discount code
-  fastify.post("/discount-codes/validate", discountCodeController.validate);
+  // ── Public endpoints ──
+  app.post("/discount-codes/validate", controller.validate);
 
-  // All routes below require authentication and admin role
-  fastify.post(
-    "/discount-codes",
-    {
-      preHandler: [authenticate, requireRole(UserRole.ADMIN)],
-    },
-    discountCodeController.create
-  );
+  // ── Admin-only routes ──
+  app.register(async (app) => {
+    app.addHook("preHandler", authenticate);
+    app.addHook("preHandler", requireAdmin);
 
-  fastify.get(
-    "/discount-codes",
-    {
-      preHandler: [authenticate, requireRole(UserRole.ADMIN)],
-    },
-    discountCodeController.getAll
-  );
+    // Lead discount config (must be before /:id to avoid path conflicts)
+    app.get("/discount-codes/lead-config", controller.getLeadDiscountConfig);
+    app.put("/discount-codes/lead-config", controller.updateLeadDiscountConfig);
 
-  fastify.get(
-    "/discount-codes/:id",
-    {
-      preHandler: [authenticate, requireRole(UserRole.ADMIN)],
-    },
-    discountCodeController.getById
-  );
-
-  fastify.put(
-    "/discount-codes/:id",
-    {
-      preHandler: [authenticate, requireRole(UserRole.ADMIN)],
-    },
-    discountCodeController.update
-  );
-
-  fastify.delete(
-    "/discount-codes/:id",
-    {
-      preHandler: [authenticate, requireRole(UserRole.ADMIN)],
-    },
-    discountCodeController.delete
-  );
+    // CRUD
+    app.post("/discount-codes", controller.create);
+    app.get("/discount-codes", controller.getAll);
+    app.get("/discount-codes/:id", controller.getById);
+    app.put("/discount-codes/:id", controller.update);
+    app.delete("/discount-codes/:id", controller.delete);
+  });
 }
-

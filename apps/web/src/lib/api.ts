@@ -1,4 +1,4 @@
-import { CreateLeadDto, CreateEventDto } from '@pawgo/shared';
+import { CreateLeadDto, CreateEventDto } from '@/shared';
 import { fetchAPI } from './auth';
 
 export async function submitLead(data: CreateLeadDto) {

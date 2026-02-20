@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { discountCodeAPI, adminInfluencerAPI } from "@/lib/discount-code";
-import { CreateDiscountCodeDto } from "@pawgo/shared";
+import { CreateDiscountCodeDto } from "@/shared";
 import { useToast } from "@/components/ui/useToast";
 
 interface Influencer {
@@ -24,10 +24,12 @@ export function CreateDiscountCodeForm({
 }: CreateDiscountCodeFormProps) {
   const { showToast, ToastView } = useToast();
   const initialFormData: CreateDiscountCodeDto = {
-    influencerId: "",
+    influencerId: undefined,
     code: "",
     discountType: "percentage",
     discountValue: 0,
+    commissionType: "percentage",
+    commissionValue: undefined,
     minPurchase: undefined,
     maxUses: undefined,
     validUntil: undefined,
@@ -60,11 +62,6 @@ export function CreateDiscountCodeForm({
     setLoading(true);
 
     try {
-      // Validate
-      if (!formData.influencerId) {
-        throw new Error("Debes seleccionar un influencer");
-      }
-
       if (!formData.code || formData.code.length < 3) {
         throw new Error("El código debe tener al menos 3 caracteres");
       }
@@ -89,7 +86,6 @@ export function CreateDiscountCodeForm({
       }
 
       if (formData.validUntil) {
-        // Codes expire at the end of the selected day (local). Validate using the start of the next day.
         const [y, m, d] = formData.validUntil.split("-").map(Number);
         const validUntilLocal = new Date(y, m - 1, d, 23, 59, 59, 0);
         if (validUntilLocal <= new Date()) {
@@ -97,7 +93,26 @@ export function CreateDiscountCodeForm({
         }
       }
 
-      await discountCodeAPI.create(formData);
+      // Commission validation for influencer codes
+      if (formData.influencerId) {
+        if (!formData.commissionValue || formData.commissionValue <= 0) {
+          throw new Error("El valor de la comisión es requerido para códigos de influencer");
+        }
+        if (formData.commissionType === "percentage" && formData.commissionValue > 100) {
+          throw new Error("El porcentaje de comisión no puede ser mayor a 100%");
+        }
+      }
+
+      // Only include influencerId if selected
+      const payload: CreateDiscountCodeDto = {
+        ...formData,
+        influencerId: formData.influencerId || undefined,
+        // Clear commission fields if no influencer
+        commissionType: formData.influencerId ? formData.commissionType : undefined,
+        commissionValue: formData.influencerId ? formData.commissionValue : undefined,
+      };
+
+      await discountCodeAPI.create(payload);
       setFormData(initialFormData);
       showToast({ type: "success", message: "Código creado correctamente" });
       onSuccess?.();
@@ -115,30 +130,33 @@ export function CreateDiscountCodeForm({
     <form onSubmit={handleSubmit} className="space-y-6">
       {ToastView}
 
-      {/* Influencer Selection */}
+      {/* Influencer Selection (Optional) */}
       <div>
         <label
           htmlFor="influencerId"
           className="block text-sm font-medium text-gray-700 mb-2"
         >
-          Influencer <span className="text-red-500">*</span>
+          Influencer{" "}
+          <span className="text-xs text-gray-400 font-normal">(opcional)</span>
         </label>
         <select
           id="influencerId"
-          value={formData.influencerId}
+          value={formData.influencerId || ""}
           onChange={(e) =>
-            setFormData({ ...formData, influencerId: e.target.value })
+            setFormData({ ...formData, influencerId: e.target.value || undefined })
           }
-          required
           className="input-field"
         >
-          <option value="">Selecciona un influencer</option>
+          <option value="">Sin influencer (código genérico)</option>
           {influencers.map((inf) => (
             <option key={inf.id} value={inf.id}>
               {inf.name} ({inf.email})
             </option>
           ))}
         </select>
+        <p className="text-xs text-gray-500 mt-1">
+          Si no seleccionás un influencer, se crea un código genérico sin comisiones
+        </p>
       </div>
 
       {/* Code */}
@@ -228,6 +246,71 @@ export function CreateDiscountCodeForm({
         </div>
       </div>
 
+      {/* Commission Config (only for influencer codes) */}
+      {formData.influencerId && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-blue-800 mb-3">
+            Configuración de Comisión del Influencer
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label
+                htmlFor="commissionType"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Tipo de Comisión <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="commissionType"
+                value={formData.commissionType || "percentage"}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    commissionType: e.target.value as "percentage" | "fixed",
+                  })
+                }
+                required
+                className="input-field"
+              >
+                <option value="percentage">Porcentaje (%)</option>
+                <option value="fixed">Monto Fijo (ARS)</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="commissionValue"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Valor de Comisión <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                id="commissionValue"
+                value={formData.commissionValue || ""}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    commissionValue: parseFloat(e.target.value) || 0,
+                  })
+                }
+                required
+                min={0}
+                max={(formData.commissionType || "percentage") === "percentage" ? 100 : undefined}
+                step={(formData.commissionType || "percentage") === "percentage" ? 1 : 0.01}
+                className="input-field"
+                placeholder={(formData.commissionType || "percentage") === "percentage" ? "10" : "500"}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {(formData.commissionType || "percentage") === "percentage"
+                  ? "Porcentaje de comisión sobre el subtotal (0-100%)"
+                  : "Monto fijo en ARS por cada venta"}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Optional Fields */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -299,7 +382,6 @@ export function CreateDiscountCodeForm({
           onChange={(e) =>
             setFormData({
               ...formData,
-                // Send date-only (YYYY-MM-DD). Backend will normalize to 00:00 UTC.
               validUntil: e.target.value ? e.target.value : undefined,
             })
           }
@@ -333,4 +415,3 @@ export function CreateDiscountCodeForm({
     </form>
   );
 }
-

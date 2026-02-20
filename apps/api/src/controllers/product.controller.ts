@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { ProductService } from "../services/product.service.js";
 import { StorageService } from "../services/storage.service.js";
-// import { JwtPayload } from "@pawgo/shared";
+// import { JwtPayload } from "../shared/index.js";
 
 const productService = new ProductService(new StorageService());
 

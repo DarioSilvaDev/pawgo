@@ -4,7 +4,7 @@ import { InfluencerPaymentService } from "../services/influencer-payment.service
 import { createAuthMiddleware } from "../auth/middleware/auth.middleware.js";
 import { requireRole } from "../auth/middleware/auth.middleware.js";
 import { TokenService } from "../auth/services/token.service.js";
-import { UserRole } from "../../../../packages/shared/dist/index.js";
+import { UserRole } from "../shared/index.js";
 
 export async function influencerPaymentRoutes(
   fastify: FastifyInstance,

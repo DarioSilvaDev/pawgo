@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import { RegisterDto, RegisterAdminDto, RegisterInfluencerDto } from "@pawgo/shared";
+import { RegisterDto, RegisterAdminDto, RegisterInfluencerDto } from "@/shared";
 import { useToast } from "@/components/ui/useToast";
 
 export function RegisterForm() {

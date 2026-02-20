@@ -1,12 +1,12 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { LeadService } from '../services/lead.service.js';
-import { CreateLeadDto, DogSize } from '../../../../packages/shared/dist/index.js';
+import { CreateLeadDto, DogSize } from '../shared/index.js';
 import { z } from 'zod';
 
 const createLeadSchema = z.object({
   email: z.string().email(),
   name: z.string().optional(),
-  dogSize: z.enum(['small', 'medium', 'large', 'extra_large']).optional(),
+  dogSize: z.enum(['extra_small', 'small', 'medium', 'large', 'extra_large']).optional(),
   incentive: z.string().optional(),
 });
 
@@ -35,6 +35,12 @@ export class LeadController {
       if (error instanceof Error && error.message.includes('Unique constraint')) {
         reply.status(409).send({
           error: 'Email already registered',
+        });
+        return;
+      }
+      if (error instanceof Error && error.message.includes('Lead already registered for this dog size')) {
+        reply.status(409).send({
+          error: 'Pedido ya registrado para este tamaño de perro',
         });
         return;
       }

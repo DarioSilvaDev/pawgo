@@ -4,7 +4,7 @@ import {
   CreateInfluencerPaymentDto,
   UpdateInfluencerPaymentDto,
   JwtPayload,
-} from "../../../../packages/shared/dist/index.js";
+} from "../shared/index.js";
 import { InfluencerPaymentService } from "../services/influencer-payment.service.js";
 import { InfluencerPaymentStatus } from "@prisma/client";
 import { StorageService } from "../services/storage.service.js";

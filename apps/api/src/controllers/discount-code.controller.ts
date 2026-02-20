@@ -1,11 +1,11 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
-import { CreateDiscountCodeDto, UpdateDiscountCodeDto } from "../../../../packages/shared/dist/index.js";
+import { CreateDiscountCodeDto, UpdateDiscountCodeDto, LeadDiscountConfig } from "../shared/index.js";
 import { DiscountCodeService } from "../services/discount-code.service.js";
 
 // Validation schemas
 const createDiscountCodeSchema = z.object({
-  influencerId: z.string().min(1, "Influencer ID es requerido"),
+  influencerId: z.string().min(1, "Influencer ID es requerido").optional(),
   code: z
     .string()
     .min(3, "El código debe tener al menos 3 caracteres")
@@ -26,6 +26,11 @@ const createDiscountCodeSchema = z.object({
   maxUses: z.number().int().positive().optional(),
   validUntil: z
     .union([z.string().datetime(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)])
+    .optional(),
+  commissionType: z.enum(["percentage", "fixed"]).optional(),
+  commissionValue: z
+    .number()
+    .positive("El valor de la comisión debe ser positivo")
     .optional(),
 });
 
@@ -48,6 +53,8 @@ const updateDiscountCodeSchema = z.object({
     .union([z.string().datetime(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)])
     .optional()
     .nullable(),
+  commissionType: z.enum(["percentage", "fixed"]).optional(),
+  commissionValue: z.number().positive().optional(),
 });
 
 const querySchema = z.object({
@@ -57,11 +64,18 @@ const querySchema = z.object({
     .transform((val) => val === "true")
     .optional(),
   code: z.string().optional(),
+  codeType: z.enum(["influencer", "lead_reservation"]).optional(),
 });
 
 const validateCodeSchema = z.object({
   code: z.string().min(1, "El código es requerido"),
   subtotal: z.number().nonnegative("El subtotal debe ser mayor o igual a 0"),
+});
+
+const leadDiscountConfigSchema = z.object({
+  discountType: z.enum(["percentage", "fixed"]),
+  discountValue: z.number().positive("El valor debe ser positivo"),
+  validDays: z.number().int().positive("Los días deben ser positivos"),
 });
 
 export function createDiscountCodeController(
@@ -102,6 +116,7 @@ export function createDiscountCodeController(
           influencerId: query.influencerId,
           isActive: query.isActive,
           code: query.code,
+          codeType: query.codeType,
         });
         reply.send(codes);
       } catch (error) {
@@ -202,17 +217,17 @@ export function createDiscountCodeController(
           discountAmount: result.discountAmount,
           discountCode: result.discountCode
             ? {
-                id: result.discountCode.id,
-                code: result.discountCode.code,
-                discountType: result.discountCode.discountType,
-                discountValue: result.discountCode.discountValue,
-                influencer: result.discountCode.influencer
-                  ? {
-                      id: result.discountCode.influencer.id,
-                      name: result.discountCode.influencer.name,
-                    }
-                  : undefined,
-              }
+              id: result.discountCode.id,
+              code: result.discountCode.code,
+              discountType: result.discountCode.discountType,
+              discountValue: result.discountCode.discountValue,
+              influencer: result.discountCode.influencer
+                ? {
+                  id: result.discountCode.influencer.id,
+                  name: result.discountCode.influencer.name,
+                }
+                : undefined,
+            }
             : undefined,
         });
       } catch (error) {
@@ -228,6 +243,46 @@ export function createDiscountCodeController(
           reply.status(400).send({
             error: error.message,
           });
+          return;
+        }
+
+        throw error;
+      }
+    },
+
+    // ─── Lead Discount Config ────────────────────
+
+    async getLeadDiscountConfig(_request: FastifyRequest, reply: FastifyReply) {
+      try {
+        const config = await discountCodeService.getLeadDiscountConfig();
+        reply.send(config);
+      } catch (error) {
+        if (error instanceof Error) {
+          reply.status(500).send({ error: error.message });
+          return;
+        }
+        throw error;
+      }
+    },
+
+    async updateLeadDiscountConfig(request: FastifyRequest, reply: FastifyReply) {
+      try {
+        const body = leadDiscountConfigSchema.parse(request.body);
+        const config = await discountCodeService.updateLeadDiscountConfig(
+          body as LeadDiscountConfig
+        );
+        reply.send(config);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          reply.status(400).send({
+            error: "Error de validación",
+            details: error.errors,
+          });
+          return;
+        }
+
+        if (error instanceof Error) {
+          reply.status(400).send({ error: error.message });
           return;
         }
 

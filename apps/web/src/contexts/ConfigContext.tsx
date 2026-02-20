@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { PublicConfig, CTAConfig } from "@pawgo/shared";
+import { PublicConfig, CTAConfig } from "@/shared";
 import { getPublicConfig } from "@/lib/config";
 
 interface ConfigContextType {

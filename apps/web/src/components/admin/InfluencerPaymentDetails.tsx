@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import Image from "next/image";
-import { InfluencerPaymentWithDetails } from "@pawgo/shared";
+import { InfluencerPaymentWithDetails } from "@/shared";
 import { updateInfluencerPayment } from "@/lib/influencer-payment";
 import { uploadPaymentProof } from "@/lib/upload";
 import { useToast } from "@/components/ui/useToast";

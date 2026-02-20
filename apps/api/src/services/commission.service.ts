@@ -40,17 +40,36 @@ export class CommissionService {
       throw new Error("Código de descuento no encontrado");
     }
 
-    // Calculate commission (equal to discount amount)
-    const commissionAmount = prismaDecimal(order.discount);
+    // Skip commission for non-influencer codes or codes without influencer
+    if (discountCode.codeType !== "influencer" || !discountCode.influencerId) {
+      return null;
+    }
+
+    // Calculate commission using the code's commission config
     const subtotal = prismaDecimal(order.subtotal);
-    const commissionRate = subtotal.gt(0)
-      ? commissionAmount.div(subtotal).mul(100)
-      : prismaDecimal(0);
+    let commissionAmount = prismaDecimal(0);
+    let commissionRate = prismaDecimal(0);
+
+    if (discountCode.commissionType && discountCode.commissionValue) {
+      const commissionValue = prismaDecimal(discountCode.commissionValue);
+
+      if (discountCode.commissionType === "percentage") {
+        // Percentage-based commission: commissionValue% of subtotal
+        commissionAmount = subtotal.mul(commissionValue).div(100);
+        commissionRate = commissionValue;
+      } else {
+        // Fixed-amount commission
+        commissionAmount = commissionValue;
+        commissionRate = subtotal.gt(0)
+          ? commissionValue.div(subtotal).mul(100)
+          : prismaDecimal(0);
+      }
+    }
 
     // Create commission
     const commission = await prisma.commission.create({
       data: {
-        influencerId: discountCode.influencerId!,
+        influencerId: discountCode.influencerId,
         orderId: order.id,
         discountCodeId: discountCode.id,
         orderTotal: prismaNumber(prismaDecimal(order.total)),

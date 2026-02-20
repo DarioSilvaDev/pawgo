@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { StorageService } from "../services/storage.service.js";
 import { InfluencerPaymentService } from "../services/influencer-payment.service.js";
 import { prisma } from "../config/prisma.client.js";
-import { JwtPayload } from "../../../../packages/shared/dist/index.js";
+import { JwtPayload } from "../shared/index.js";
 
 /**
  * Datos extraídos de un archivo multipart

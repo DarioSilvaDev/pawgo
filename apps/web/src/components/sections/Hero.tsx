@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { trackEvent } from "@/lib/analytics";
-import { EventType } from "@pawgo/shared";
+import { EventType } from "@/shared";
 import { BuyIntentModal } from "@/components/modals/BuyIntentModal";
 import { useCTAConfig } from "@/contexts/ConfigContext";
 

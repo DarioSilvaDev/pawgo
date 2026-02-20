@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { discountCodeAPI } from "@/lib/discount-code";
-import { DiscountCodeWithInfluencer } from "@pawgo/shared";
+import { DiscountCodeWithInfluencer } from "@/shared";
 import { useConfirmDialog } from "@/components/ui/useConfirmDialog";
 import { useToast } from "@/components/ui/useToast";
 
@@ -22,6 +22,7 @@ export function DiscountCodesList({ refreshKey }: DiscountCodesListProps) {
   const [filters, setFilters] = useState({
     isActive: undefined as boolean | undefined,
     code: "",
+    codeType: undefined as string | undefined,
   });
 
   const loadCodes = useCallback(async () => {
@@ -30,6 +31,7 @@ export function DiscountCodesList({ refreshKey }: DiscountCodesListProps) {
       const data = await discountCodeAPI.getAll({
         isActive: filters.isActive,
         code: filters.code || undefined,
+        codeType: filters.codeType,
       });
       setCodes(data);
     } catch (err) {
@@ -41,7 +43,7 @@ export function DiscountCodesList({ refreshKey }: DiscountCodesListProps) {
     } finally {
       setLoading(false);
     }
-  }, [filters.code, filters.isActive, showToast]);
+  }, [filters.code, filters.isActive, filters.codeType, showToast]);
 
   useEffect(() => {
     loadCodes();
@@ -90,13 +92,27 @@ export function DiscountCodesList({ refreshKey }: DiscountCodesListProps) {
 
   const formatDate = (dateString: string | Date | undefined) => {
     if (!dateString) return "Sin expiración";
-    // Backend stores `validUntil` as end-of-day Argentina time (as UTC timestamp).
     return new Date(dateString).toLocaleDateString("es-AR", {
       year: "numeric",
       month: "long",
       day: "numeric",
       timeZone: "America/Argentina/Buenos_Aires",
     });
+  };
+
+  const getCodeTypeBadge = (codeType: string) => {
+    if (codeType === "lead_reservation") {
+      return (
+        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+          Lead
+        </span>
+      );
+    }
+    return (
+      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+        Influencer
+      </span>
+    );
   };
 
   if (loading && codes.length === 0) {
@@ -117,7 +133,7 @@ export function DiscountCodesList({ refreshKey }: DiscountCodesListProps) {
 
       {/* Filters */}
       <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Buscar por código
@@ -139,8 +155,8 @@ export function DiscountCodesList({ refreshKey }: DiscountCodesListProps) {
                 filters.isActive === undefined
                   ? "all"
                   : filters.isActive
-                  ? "active"
-                  : "inactive"
+                    ? "active"
+                    : "inactive"
               }
               onChange={(e) =>
                 setFilters({
@@ -156,6 +172,25 @@ export function DiscountCodesList({ refreshKey }: DiscountCodesListProps) {
               <option value="all">Todos</option>
               <option value="active">Activos</option>
               <option value="inactive">Inactivos</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tipo
+            </label>
+            <select
+              value={filters.codeType || "all"}
+              onChange={(e) =>
+                setFilters({
+                  ...filters,
+                  codeType: e.target.value === "all" ? undefined : e.target.value,
+                })
+              }
+              className="input-field"
+            >
+              <option value="all">Todos</option>
+              <option value="influencer">Influencer</option>
+              <option value="lead_reservation">Lead</option>
             </select>
           </div>
         </div>
@@ -176,10 +211,19 @@ export function DiscountCodesList({ refreshKey }: DiscountCodesListProps) {
                     Código
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Tipo
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Influencer
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Descuento
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Comisión
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Reserva
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Usos
@@ -204,14 +248,23 @@ export function DiscountCodesList({ refreshKey }: DiscountCodesListProps) {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {code.influencer.name}
+                      {getCodeTypeBadge(code.codeType)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {code.influencer ? (
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {code.influencer.name}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {code.influencer.email}
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-500">
-                          {code.influencer.email}
-                        </div>
-                      </div>
+                      ) : (
+                        <span className="text-sm text-gray-400 italic">
+                          —
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
@@ -225,6 +278,37 @@ export function DiscountCodesList({ refreshKey }: DiscountCodesListProps) {
                         </div>
                       )}
                     </td>
+                    {/* Comisión */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {code.commissionType && code.commissionValue ? (
+                        <div className="text-sm text-gray-900">
+                          {code.commissionType === "percentage"
+                            ? `${code.commissionValue}%`
+                            : formatCurrency(code.commissionValue)}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400 italic">—</span>
+                      )}
+                    </td>
+                    {/* Reserva (lead data) */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {code.codeType === "lead_reservation" && (code.leadEmail || code.leadName) ? (
+                        <div>
+                          {code.leadName && (
+                            <div className="text-sm font-medium text-gray-900">
+                              {code.leadName}
+                            </div>
+                          )}
+                          {code.leadEmail && (
+                            <div className="text-sm text-gray-500">
+                              {code.leadEmail}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400 italic">—</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {code.usedCount}
                       {code.maxUses && ` / ${code.maxUses}`}
@@ -234,11 +318,10 @@ export function DiscountCodesList({ refreshKey }: DiscountCodesListProps) {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          code.isActive
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-800"
-                        }`}
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${code.isActive
+                          ? "bg-green-100 text-green-800"
+                          : "bg-gray-100 text-gray-800"
+                          }`}
                       >
                         {code.isActive ? "Activo" : "Inactivo"}
                       </span>
@@ -249,11 +332,10 @@ export function DiscountCodesList({ refreshKey }: DiscountCodesListProps) {
                           onClick={() =>
                             handleToggleActive(code.id, code.isActive)
                           }
-                          className={`px-3 py-1 rounded text-xs ${
-                            code.isActive
-                              ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-                              : "bg-green-100 text-green-800 hover:bg-green-200"
-                          }`}
+                          className={`px-3 py-1 rounded text-xs ${code.isActive
+                            ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+                            : "bg-green-100 text-green-800 hover:bg-green-200"
+                            }`}
                         >
                           {code.isActive ? "Desactivar" : "Activar"}
                         </button>

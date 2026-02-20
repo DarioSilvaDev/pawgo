@@ -1,6 +1,6 @@
 "use client";
 
-import { EventType } from "@pawgo/shared";
+import { EventType } from "@/shared";
 import { trackEvent } from "@/lib/analytics";
 import { useState } from "react";
 import { BuyIntentModal } from "@/components/modals/BuyIntentModal";

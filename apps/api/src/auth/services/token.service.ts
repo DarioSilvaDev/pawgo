@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { PrismaClient } from "@prisma/client";
-import { JwtPayload } from "../../../../../packages/shared/dist/index.js";
+import { JwtPayload } from "../../shared/index.js";
 import { randomUUID } from "crypto";
 
 import { prisma } from "../../config/prisma.client.js";

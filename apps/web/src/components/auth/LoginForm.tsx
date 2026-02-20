@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import { LoginDto } from "@pawgo/shared";
+import { LoginDto } from "@/shared";
 import { useToast } from "@/components/ui/useToast";
 
 export function LoginForm() {

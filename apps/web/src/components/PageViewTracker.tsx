@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { trackEvent } from '@/lib/analytics';
-import { EventType } from '@pawgo/shared';
+import { EventType } from '@/shared';
 
 export function PageViewTracker() {
   useEffect(() => {

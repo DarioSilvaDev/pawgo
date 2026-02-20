@@ -2,7 +2,7 @@ import {
   CreateInfluencerPaymentDto,
   UpdateInfluencerPaymentDto,
   InfluencerPaymentWithDetails,
-} from "@pawgo/shared";
+} from "@/shared";
 import { fetchAPI } from "./auth";
 
 /**

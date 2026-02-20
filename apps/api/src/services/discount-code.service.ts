@@ -3,29 +3,55 @@ import {
   CreateDiscountCodeDto,
   UpdateDiscountCodeDto,
   DiscountCodeWithInfluencer,
-} from "../../../../packages/shared/dist/index.js";
+  LeadDiscountConfig,
+} from "../shared/index.js";
 import { prismaDecimal, prismaNumber } from "../utils/decimal.js";
 import { DateTime } from "luxon";
+import { customAlphabet } from "nanoid";
 
-const prisma = new PrismaClient();
+// Alfabeto sin caracteres ambiguos (sin 0, O, I, 1, l)
+const nanoid = customAlphabet("23456789ABCDEFGHJKLMNPQRSTUVWXYZ", 10);
+
+import { prisma } from "../config/prisma.client.js";
 
 const ARGENTINA_TZ = "America/Argentina/Buenos_Aires";
 
+const DEFAULT_LEAD_DISCOUNT_CONFIG: LeadDiscountConfig = {
+  discountType: "percentage",
+  discountValue: 15,
+  validDays: 7,
+};
+
+// Prisma include fragment shared across all queries
+const DISCOUNT_CODE_INCLUDE = {
+  influencer: {
+    select: {
+      id: true,
+      name: true,
+      auth: {
+        select: {
+          email: true,
+        },
+      },
+    },
+  },
+  leadReservation: {
+    select: {
+      email: true,
+      name: true,
+    },
+  },
+} as const;
+
 function normalizeExpiryToArgentinaEndOfDayUtc(input: string | Date): Date {
-  // Business rule: codes expire at the end of the chosen day in Argentina (Buenos Aires),
-  // stored as a UTC timestamp.
-  //
-  // Example: chosen date = 2026-01-18 (AR) → validUntil = 2026-01-19T02:59:59.000Z
   let dateOnly: string;
 
   if (typeof input === "string") {
-    // Accept either "YYYY-MM-DD" or full ISO datetime. Extract the calendar date.
     if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
       dateOnly = input;
     } else {
       const parsed = DateTime.fromISO(input, { setZone: true });
       if (!parsed.isValid) throw new Error("Fecha de expiración inválida");
-      // Convert to Argentina timezone before picking the calendar date
       const iso = parsed.setZone(ARGENTINA_TZ).toISODate();
       if (!iso) throw new Error("Fecha de expiración inválida");
       dateOnly = iso;
@@ -48,29 +74,83 @@ function normalizeExpiryToArgentinaEndOfDayUtc(input: string | Date): Date {
   return dt.toJSDate();
 }
 
+/**
+ * Map a raw Prisma DiscountCode (with optional influencer include) to our DTO.
+ * Handles nullable influencer gracefully — no more `!` assertions.
+ */
+function mapToDto(code: any): DiscountCodeWithInfluencer {
+  return {
+    id: code.id,
+    code: code.code,
+    codeType: code.codeType as "influencer" | "lead_reservation",
+    influencerId: code.influencerId ?? null,
+    discountType: code.discountType as "percentage" | "fixed",
+    discountValue: Number(code.discountValue),
+    commissionType: code.commissionType
+      ? (code.commissionType as "percentage" | "fixed")
+      : undefined,
+    commissionValue: code.commissionValue
+      ? Number(code.commissionValue)
+      : undefined,
+    minPurchase: code.minPurchase ? Number(code.minPurchase) : undefined,
+    maxUses: code.maxUses ?? undefined,
+    usedCount: code.usedCount,
+    isActive: code.isActive,
+    validFrom: code.validFrom,
+    validUntil: code.validUntil ?? undefined,
+    createdAt: code.createdAt,
+    updatedAt: code.updatedAt,
+    influencer: code.influencer
+      ? {
+        id: code.influencer.id,
+        name: code.influencer.name,
+        email: code.influencer.auth?.email || "",
+      }
+      : null,
+    leadEmail: code.leadReservation?.email ?? undefined,
+    leadName: code.leadReservation?.name ?? undefined,
+  };
+}
+
 export class DiscountCodeService {
   /**
-   * Create a new discount code (Admin only)
+   * Create a new discount code (Admin only).
+   * If influencerId is provided, validates the influencer exists and sets codeType = "influencer".
+   * Otherwise, creates a generic code.
    */
   async create(
     data: CreateDiscountCodeDto
   ): Promise<DiscountCodeWithInfluencer> {
     // Validate code uniqueness
     const existingCode = await prisma.discountCode.findUnique({
-      where: { code: data.code },
+      where: { code: data.code.toUpperCase().trim() },
     });
 
     if (existingCode) {
       throw new Error("El código ya existe");
     }
 
-    // Validate influencer exists
-    const influencer = await prisma.influencer.findUnique({
-      where: { id: data.influencerId },
-    });
+    // Validate influencer exists if provided
+    let codeType: "influencer" | "lead_reservation" = "lead_reservation";
+    if (data.influencerId) {
+      const influencer = await prisma.influencer.findUnique({
+        where: { id: data.influencerId },
+      });
+      if (!influencer) {
+        throw new Error("Influencer no encontrado");
+      }
+      codeType = "influencer";
 
-    if (!influencer) {
-      throw new Error("Influencer no encontrado");
+      // Commission config is required for influencer codes
+      if (!data.commissionType || data.commissionValue === undefined || data.commissionValue === null) {
+        throw new Error("La configuración de comisión es requerida para códigos de influencer");
+      }
+      if (data.commissionValue <= 0) {
+        throw new Error("El valor de la comisión debe ser mayor a 0");
+      }
+      if (data.commissionType === "percentage" && data.commissionValue > 100) {
+        throw new Error("El porcentaje de comisión no puede ser mayor a 100%");
+      }
     }
 
     // Validate discount value
@@ -105,9 +185,18 @@ export class DiscountCodeService {
     const discountCode = await prisma.discountCode.create({
       data: {
         code: data.code.toUpperCase().trim(),
-        influencerId: data.influencerId,
+        influencerId: data.influencerId || null,
+        codeType,
         discountType: data.discountType,
         discountValue: prismaNumber(prismaDecimal(data.discountValue)),
+        commissionType:
+          data.commissionType && data.influencerId
+            ? data.commissionType
+            : null,
+        commissionValue:
+          data.commissionValue !== undefined && data.influencerId
+            ? prismaNumber(prismaDecimal(data.commissionValue))
+            : null,
         minPurchase:
           data.minPurchase !== undefined
             ? prismaNumber(prismaDecimal(data.minPurchase))
@@ -118,46 +207,20 @@ export class DiscountCodeService {
           : null,
         isActive: true,
       },
-      include: {
-        influencer: {
-          select: {
-            id: true,
-            name: true,
-            auth: {
-              select: {
-                email: true,
-              },
-            },
-          },
-        },
-      },
+      include: DISCOUNT_CODE_INCLUDE,
     });
 
-    return {
-      ...discountCode,
-      influencerId: discountCode.influencerId!,
-      discountType: discountCode.discountType as "percentage" | "fixed",
-      discountValue: Number(discountCode.discountValue),
-      minPurchase: discountCode.minPurchase
-        ? Number(discountCode.minPurchase)
-        : undefined,
-      maxUses: discountCode.maxUses ?? undefined,
-      validUntil: discountCode.validUntil ?? undefined,
-      influencer: {
-        id: discountCode.influencer!.id,
-        name: discountCode.influencer!.name,
-        email: discountCode.influencer!.auth?.email || "",
-      },
-    };
+    return mapToDto(discountCode);
   }
 
   /**
-   * Get all discount codes with influencer info (Admin)
+   * Get all discount codes with optional filters (Admin)
    */
   async getAll(filters?: {
     influencerId?: string;
     isActive?: boolean;
     code?: string;
+    codeType?: string;
   }): Promise<DiscountCodeWithInfluencer[]> {
     const where: Prisma.DiscountCodeWhereInput = {};
 
@@ -176,40 +239,19 @@ export class DiscountCodeService {
       };
     }
 
+    if (filters?.codeType) {
+      where.codeType = filters.codeType as any;
+    }
+
     const codes = await prisma.discountCode.findMany({
       where,
-      include: {
-        influencer: {
-          select: {
-            id: true,
-            name: true,
-            auth: {
-              select: {
-                email: true,
-              },
-            },
-          },
-        },
-      },
+      include: DISCOUNT_CODE_INCLUDE,
       orderBy: {
         createdAt: "desc",
       },
     });
 
-    return codes.map((code) => ({
-      ...code,
-      influencerId: code.influencerId!,
-      discountType: code.discountType as "percentage" | "fixed",
-      discountValue: Number(code.discountValue),
-      minPurchase: code.minPurchase ? Number(code.minPurchase) : undefined,
-      maxUses: code.maxUses ?? undefined,
-      validUntil: code.validUntil ?? undefined,
-      influencer: {
-        id: code.influencer!.id,
-        name: code.influencer!.name,
-        email: code.influencer!.auth?.email || "",
-      },
-    }));
+    return codes.map(mapToDto);
   }
 
   /**
@@ -218,39 +260,14 @@ export class DiscountCodeService {
   async getById(id: string): Promise<DiscountCodeWithInfluencer | null> {
     const code = await prisma.discountCode.findUnique({
       where: { id },
-      include: {
-        influencer: {
-          select: {
-            id: true,
-            name: true,
-            auth: {
-              select: {
-                email: true,
-              },
-            },
-          },
-        },
-      },
+      include: DISCOUNT_CODE_INCLUDE,
     });
 
     if (!code) {
       return null;
     }
 
-    return {
-      ...code,
-      influencerId: code.influencerId!,
-      discountType: code.discountType as "percentage" | "fixed",
-      discountValue: Number(code.discountValue),
-      minPurchase: code.minPurchase ? Number(code.minPurchase) : undefined,
-      maxUses: code.maxUses ?? undefined,
-      validUntil: code.validUntil ?? undefined,
-      influencer: {
-        id: code.influencer!.id,
-        name: code.influencer!.name,
-        email: code.influencer!.auth?.email || "",
-      },
-    };
+    return mapToDto(code);
   }
 
   /**
@@ -259,41 +276,14 @@ export class DiscountCodeService {
   async getByCode(code: string): Promise<DiscountCodeWithInfluencer | null> {
     const discountCode = await prisma.discountCode.findUnique({
       where: { code: code.toUpperCase().trim() },
-      include: {
-        influencer: {
-          select: {
-            id: true,
-            name: true,
-            auth: {
-              select: {
-                email: true,
-              },
-            },
-          },
-        },
-      },
+      include: DISCOUNT_CODE_INCLUDE,
     });
 
     if (!discountCode) {
       return null;
     }
 
-    return {
-      ...discountCode,
-      influencerId: discountCode.influencerId!,
-      discountType: discountCode.discountType as "percentage" | "fixed",
-      discountValue: Number(discountCode.discountValue),
-      minPurchase: discountCode.minPurchase
-        ? Number(discountCode.minPurchase)
-        : undefined,
-      maxUses: discountCode.maxUses ?? undefined,
-      validUntil: discountCode.validUntil ?? undefined,
-      influencer: {
-        id: discountCode.influencer!.id,
-        name: discountCode.influencer!.name,
-        email: discountCode.influencer!.auth?.email || "",
-      },
-    };
+    return mapToDto(discountCode);
   }
 
   /**
@@ -383,37 +373,10 @@ export class DiscountCodeService {
     const updatedCode = await prisma.discountCode.update({
       where: { id },
       data: updateData,
-      include: {
-        influencer: {
-          select: {
-            id: true,
-            name: true,
-            auth: {
-              select: {
-                email: true,
-              },
-            },
-          },
-        },
-      },
+      include: DISCOUNT_CODE_INCLUDE,
     });
 
-    return {
-      ...updatedCode,
-      influencerId: updatedCode.influencerId!,
-      discountType: updatedCode.discountType as "percentage" | "fixed",
-      discountValue: Number(updatedCode.discountValue),
-      minPurchase: updatedCode.minPurchase
-        ? Number(updatedCode.minPurchase)
-        : undefined,
-      maxUses: updatedCode.maxUses ?? undefined,
-      validUntil: updatedCode.validUntil ?? undefined,
-      influencer: {
-        id: updatedCode.influencer!.id,
-        name: updatedCode.influencer!.name,
-        email: updatedCode.influencer!.auth?.email || "",
-      },
-    };
+    return mapToDto(updatedCode);
   }
 
   /**
@@ -471,11 +434,10 @@ export class DiscountCodeService {
       };
     }
 
-    // Check expiration (validUntil is stored as end-of-day in Argentina time, as a UTC timestamp)
+    // Check expiration
     if (discountCode.validUntil) {
       const now = new Date();
       const validUntil = new Date(discountCode.validUntil);
-      // Inclusive until validUntil (23:59:59). Expired only after that.
       if (now > validUntil) {
         return {
           valid: false,
@@ -548,5 +510,104 @@ export class DiscountCodeService {
         },
       },
     });
+  }
+
+  // ─── Lead Reservation Codes ──────────────────────────────
+
+  /**
+   * Create an auto-generated discount code for a lead.
+   * Reads discount config from AppConfig ("lead_discount_config").
+   */
+  async createLeadReservationCode(leadId: string): Promise<DiscountCodeWithInfluencer> {
+    const config = await this.getLeadDiscountConfig();
+
+    const code = nanoid(10).toUpperCase();
+
+    const validUntil = DateTime.now()
+      .setZone(ARGENTINA_TZ)
+      .plus({ days: config.validDays })
+      .endOf("day")
+      .set({ millisecond: 0 })
+      .toUTC()
+      .toJSDate();
+
+    const discountCode = await prisma.discountCode.create({
+      data: {
+        code,
+        codeType: "lead_reservation",
+        influencerId: null,
+        discountType: config.discountType,
+        discountValue: prismaNumber(prismaDecimal(config.discountValue)),
+        maxUses: 1,
+        validUntil,
+        isActive: true,
+        leadReservation: {
+          connect: { id: leadId },
+        },
+      },
+      include: DISCOUNT_CODE_INCLUDE,
+    });
+
+    return mapToDto(discountCode);
+  }
+
+  // ─── Lead Discount Config (AppConfig) ────────────────────
+
+  /**
+   * Get the current lead discount configuration.
+   * Falls back to defaults if not yet configured.
+   */
+  async getLeadDiscountConfig(): Promise<LeadDiscountConfig> {
+    const row = await prisma.appConfig.findUnique({
+      where: { key: "lead_discount_config" },
+    });
+
+    if (!row) {
+      return { ...DEFAULT_LEAD_DISCOUNT_CONFIG };
+    }
+
+    const value = row.value as Record<string, unknown>;
+    return {
+      discountType: (value.discountType as "percentage" | "fixed") || DEFAULT_LEAD_DISCOUNT_CONFIG.discountType,
+      discountValue: (typeof value.discountValue === "number" ? value.discountValue : DEFAULT_LEAD_DISCOUNT_CONFIG.discountValue),
+      validDays: (typeof value.validDays === "number" ? value.validDays : DEFAULT_LEAD_DISCOUNT_CONFIG.validDays),
+    };
+  }
+
+  /**
+   * Update the lead discount configuration (admin only).
+   */
+  async updateLeadDiscountConfig(config: LeadDiscountConfig): Promise<LeadDiscountConfig> {
+    // Validate
+    if (config.discountValue <= 0) {
+      throw new Error("El valor del descuento debe ser mayor a 0");
+    }
+    if (config.discountType === "percentage" && config.discountValue > 100) {
+      throw new Error("El porcentaje de descuento no puede ser mayor a 100%");
+    }
+    if (config.validDays <= 0) {
+      throw new Error("Los días de validez deben ser mayor a 0");
+    }
+
+    await prisma.appConfig.upsert({
+      where: { key: "lead_discount_config" },
+      update: {
+        value: {
+          discountType: config.discountType,
+          discountValue: config.discountValue,
+          validDays: config.validDays,
+        },
+      },
+      create: {
+        key: "lead_discount_config",
+        value: {
+          discountType: config.discountType,
+          discountValue: config.discountValue,
+          validDays: config.validDays,
+        },
+      },
+    });
+
+    return config;
   }
 }
