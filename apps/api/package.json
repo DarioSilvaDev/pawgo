@@ -6,17 +6,17 @@
     "dev": "tsx watch src/server.ts",
     "worker:dev": "tsx watch src/worker.ts",
     "worker:start": "node dist/worker.js",
-    "build": "pnpm run prisma:generate && pnpm run prisma:migrate && tsc",
+    "build": "npm run prisma:generate && npm run prisma:migrate && tsc",
     "start": "node dist/server.js",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist",
     "prisma:generate": "prisma generate",
     "prisma:fix-client": "node scripts/fix-prisma-client.mjs",
-    "prisma:generate:full": "pnpm run prisma:generate && pnpm run prisma:fix-client",
-    "prisma:migrate": "prisma migrate dev",
+    "prisma:generate:full": "npm run prisma:generate && npm run prisma:fix-client",
+    "prisma:migrate": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
-    "postinstall": "pnpm run prisma:fix-client"
+    "postinstall": "npm run prisma:fix-client"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
