@@ -1,9 +1,81 @@
 import { FastifyRequest, FastifyReply } from "fastify";
+import crypto from "crypto";
 import { MercadoPagoService } from "../services/mercadopago.service.js";
 import { OrderService } from "../services/order.service.js";
 import { OrderStatus, PaymentStatus, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+const WEBHOOK_SECRET = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+
+function verifyMercadoPagoWebhookSignature(request: FastifyRequest): boolean {
+  // If no secret is configured, log a warning and accept the webhook (useful for development)
+  if (!WEBHOOK_SECRET) {
+    console.warn(
+      "[Webhook] MERCADOPAGO_WEBHOOK_SECRET not configured. Skipping signature verification."
+    );
+    return true;
+  }
+
+  const xSignature = request.headers["x-signature"];
+  const xRequestId = request.headers["x-request-id"];
+
+  if (!xSignature || !xRequestId || typeof xSignature !== "string" || typeof xRequestId !== "string") {
+    console.warn("[Webhook] Missing x-signature or x-request-id headers");
+    return false;
+  }
+
+  const parts = xSignature.split(",");
+  let ts: string | undefined;
+  let hash: string | undefined;
+
+  for (const part of parts) {
+    const [key, value] = part.split("=", 2).map((s) => s.trim());
+    if (key === "ts") {
+      ts = value;
+    } else if (key === "v1") {
+      hash = value;
+    }
+  }
+
+  if (!ts || !hash) {
+    console.warn("[Webhook] Invalid x-signature format");
+    return false;
+  }
+
+  // Extract data.id from query params if present
+  let dataId = "";
+  try {
+    const rawUrl = request.raw.url || "";
+    const url = new URL(rawUrl, "http://localhost");
+    const qpDataId = url.searchParams.get("data.id");
+    if (qpDataId) {
+      dataId = qpDataId.toLowerCase();
+    }
+  } catch (err) {
+    console.warn("[Webhook] Failed to parse request URL for signature validation:", err);
+  }
+
+  // Build manifest according to Mercado Pago docs
+  // Template: id:[data.id_url];request-id:[x-request-id_header];ts:[ts_header];
+  const partsManifest: string[] = [];
+  if (dataId) {
+    partsManifest.push(`id:${dataId}`);
+  }
+  partsManifest.push(`request-id:${xRequestId}`);
+  partsManifest.push(`ts:${ts}`);
+  const manifest = `${partsManifest.join(";")};`;
+
+  const hmac = crypto.createHmac("sha256", WEBHOOK_SECRET);
+  hmac.update(manifest);
+  const computed = hmac.digest("hex");
+
+  if (computed !== hash) {
+    console.warn("[Webhook] Invalid HMAC signature for MercadoPago webhook");
+    return false;
+  }
+
+  return true;
+}
 
 export function createWebhookController(
   mercadoPagoService: MercadoPagoService,
@@ -12,6 +84,11 @@ export function createWebhookController(
   return {
     async mercadopago(request: FastifyRequest, reply: FastifyReply) {
       try {
+        if (!verifyMercadoPagoWebhookSignature(request)) {
+          reply.status(400).send({ error: "Invalid webhook signature" });
+          return;
+        }
+
         const data = request.body as {
           type: string;
           data: { id: string; external_reference?: string };
@@ -76,53 +153,84 @@ export function createWebhookController(
 
         console.log(`[Webhook] Found payment ${payment.id} for order ${payment.orderId}, current status: ${payment.status}`);
 
-        // Update payment status
-        let paymentStatus: PaymentStatus = PaymentStatus.pending;
-        let orderStatus: OrderStatus | null = null;
+        // Determine target statuses based on MercadoPago status
+        let targetPaymentStatus: PaymentStatus = PaymentStatus.pending;
+        let targetOrderStatus: OrderStatus | null = null;
 
         if (result.status === "approved") {
-          paymentStatus = PaymentStatus.approved;
-          orderStatus = OrderStatus.paid;
+          targetPaymentStatus = PaymentStatus.approved;
+          targetOrderStatus = OrderStatus.paid;
         } else if (result.status === "rejected") {
-          paymentStatus = PaymentStatus.rejected;
+          targetPaymentStatus = PaymentStatus.rejected;
           // Si el pago es rechazado, cancelar la orden
-          orderStatus = OrderStatus.cancelled;
+          targetOrderStatus = OrderStatus.cancelled;
         } else if (result.status === "cancelled") {
-          paymentStatus = PaymentStatus.cancelled;
+          targetPaymentStatus = PaymentStatus.cancelled;
           // Si el pago es cancelado, cancelar la orden
-          orderStatus = OrderStatus.cancelled;
+          targetOrderStatus = OrderStatus.cancelled;
         } else if (result.status === "refunded") {
-          paymentStatus = PaymentStatus.refunded;
+          targetPaymentStatus = PaymentStatus.refunded;
           // Si el pago es reembolsado, cancelar la orden
-          orderStatus = OrderStatus.cancelled;
+          targetOrderStatus = OrderStatus.cancelled;
         } else if (result.status === "in_process" || result.status === "pending") {
-          paymentStatus = PaymentStatus.pending;
+          targetPaymentStatus = PaymentStatus.pending;
           // Mantener el estado actual de la orden
         }
 
-        console.log(`[Webhook] Updating payment ${payment.id} to status: ${paymentStatus}, order status: ${orderStatus || payment.order.status}`);
+        const currentPaymentStatus = payment.status as PaymentStatus;
+        const currentOrderStatus = payment.order.status as OrderStatus;
 
-        // Update payment
+        // Idempotencia básica: si no hay cambio de estado, no hacer nada
+        if (
+          currentPaymentStatus === targetPaymentStatus &&
+          (!targetOrderStatus || currentOrderStatus === targetOrderStatus)
+        ) {
+          console.log(
+            `[Webhook] No state change required for payment ${payment.id} (status=${currentPaymentStatus}, orderStatus=${currentOrderStatus})`
+          );
+          reply.status(200).send({ received: true });
+          return;
+        }
+
+        // No degradar pedidos pagados a cancelados sin política explícita
+        if (
+          currentOrderStatus === OrderStatus.paid &&
+          targetOrderStatus === OrderStatus.cancelled
+        ) {
+          console.warn(
+            `[Webhook] Ignoring transition from paid to cancelled for order ${payment.orderId}`
+          );
+          reply.status(200).send({ received: true });
+          return;
+        }
+
+        console.log(
+          `[Webhook] Updating payment ${payment.id} from ${currentPaymentStatus} to ${targetPaymentStatus}, order status: ${targetOrderStatus || currentOrderStatus}`
+        );
+
+        // Update payment status
         await prisma.payment.update({
           where: { id: payment.id },
           data: {
-            status: paymentStatus,
+            status: targetPaymentStatus,
             mercadoPagoPaymentId: result.paymentId,
           },
         });
 
         // Update order status if needed
-        if (orderStatus) {
-          console.log(`[Webhook] Updating order ${payment.orderId} to ${orderStatus} status`);
-          await orderService.updateStatus(payment.orderId, orderStatus);
+        if (targetOrderStatus && currentOrderStatus !== targetOrderStatus) {
+          console.log(
+            `[Webhook] Updating order ${payment.orderId} from ${currentOrderStatus} to ${targetOrderStatus}`
+          );
+          await orderService.updateStatus(payment.orderId, targetOrderStatus);
         }
 
         console.log(`[Webhook] Successfully processed webhook for payment ${result.paymentId}`);
         reply.status(200).send({ received: true });
       } catch (error) {
         console.error("Error processing MercadoPago webhook:", error);
-        // Always return 200 to MercadoPago to avoid retries
-        reply.status(200).send({ received: true, error: "Processing error" });
+        // Return 500 so MercadoPago can retry in case of transient failures
+        reply.status(500).send({ received: false, error: "Processing error" });
       }
     },
   };

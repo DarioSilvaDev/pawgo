@@ -14,7 +14,6 @@ const client = new MercadoPagoConfig({
   accessToken: ACCESS_TOKEN,
   options: {
     timeout: 5000,
-    idempotencyKey: "abc",
   },
 });
 
@@ -239,20 +238,6 @@ export class MercadoPagoService {
     }
 
     return null;
-  }
-
-  /**
-   * Verify webhook signature (if MercadoPago provides it)
-   */
-  verifyWebhookSignature(
-    payload: string,
-    signature: string
-  ): boolean {
-    console.log("🚀 ~ MercadoPagoService ~ verifyWebhookSignature ~ signature:", signature)
-    console.log("🚀 ~ MercadoPagoService ~ verifyWebhookSignature ~ payload:", payload)
-    // TODO: Implement signature verification if MercadoPago provides it
-    // For now, we'll trust the webhook (not recommended for production)
-    return true;
   }
 
   /**

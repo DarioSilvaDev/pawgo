@@ -169,6 +169,24 @@ export function createOrderController(
         // Get frontend URL from env or use default
         const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
+        // If there is already a pending MercadoPago payment for this order, reuse it
+        const existingPendingPayment = await prisma.payment.findFirst({
+          where: {
+            orderId: order.id,
+            status: "pending",
+            paymentMethod: "mercadopago",
+          },
+        });
+
+        if (existingPendingPayment && existingPendingPayment.paymentLink) {
+          reply.send({
+            paymentId: existingPendingPayment.id,
+            paymentLink: existingPendingPayment.paymentLink,
+            preferenceId: existingPendingPayment.mercadoPagoPreferenceId,
+          });
+          return;
+        }
+
         // Convert Prisma order to Order type
         const orderForPayment: Order & { id: string } = {
           id: order.id,
