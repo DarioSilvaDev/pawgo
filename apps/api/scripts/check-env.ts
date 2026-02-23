@@ -59,7 +59,7 @@ for (const envVar of requiredVars) {
     // Ocultar valores sensibles
     const displayValue =
       envVar.name === "MERCADOPAGO_ACCESS_TOKEN" ||
-      envVar.name === "DATABASE_URL"
+        envVar.name === "DATABASE_URL"
         ? `${value.substring(0, 10)}...`
         : value;
     console.log(`  ✅ ${envVar.name}: ${displayValue}`);

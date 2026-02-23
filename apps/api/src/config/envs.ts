@@ -11,6 +11,7 @@ interface IEnvVars {
     JWT_SECRET: string;
     MERCADOPAGO_ACCESS_TOKEN: string;
     MERCADOPAGO_PUBLIC_KEY: string;
+    MERCADOPAGO_WEBHOOK_SECRET: string;
     SMTP_HOST: string;
     SMTP_PORT: number;
     SMTP_SOPORTE_USER: string;
@@ -61,6 +62,7 @@ const envsSchema = z
         // MercadoPago
         MERCADOPAGO_ACCESS_TOKEN: z.string().min(1).describe("El token de acceso de MercadoPago"),
         MERCADOPAGO_PUBLIC_KEY: z.string().min(1).describe("La clave pública de MercadoPago"),
+        MERCADOPAGO_WEBHOOK_SECRET: z.string().min(1).describe("El secreto para el webhook de MercadoPago"),
 
         // SMTP
         SMTP_HOST: z.string().min(1).describe("El host de SMTP"),
