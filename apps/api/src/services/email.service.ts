@@ -88,7 +88,7 @@ if (SMTP_VENTAS_USER && SMTP_VENTAS_PASS) {
  * Generate email header with PawGo logo
  */
 function getEmailHeader(): string {
-  const logoUrl = `${FRONTEND_URL}/images/PawGo.svg`;
+  const logoUrl = envs.LOGO_URL;
   return `
     <div class="header" style="background-color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
       <img src="${logoUrl}" alt="PawGo Logo" style="max-width: 200px; height: auto;" />
@@ -113,7 +113,7 @@ export class EmailService {
     html: string;
   }): Promise<void> {
     try {
-      const { data, error } = await resend.emails.send({
+      const { error } = await resend.emails.send({
         from: `PawGo <no-reply@noreply.pawgo-pet.com>`,
         to: params.to,
         subject: params.subject,

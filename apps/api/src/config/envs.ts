@@ -26,7 +26,7 @@ interface IEnvVars {
     B2_KEY_ID: string;
     B2_APP_KEY: string;
     B2_BUCKET_ID: string;
-
+    LOGO_URL: string;
     MICORREO_BASE_URL: string;
     MICORREO_USERNAME: string;
     MICORREO_PASSWORD: string;
@@ -79,7 +79,7 @@ const envsSchema = z
         SMTP_VENTAS_PASS: z.string().min(1).describe("La contraseña de SMTP de ventas"),
         // Resend
         RESEND_API_KEY: z.string().min(1).describe("La clave de Resend"),
-
+        LOGO_URL: z.string().url().describe("La URL del logo"),
         // Jobs
         JOB_DISCOUNT_CODE_SCAN_CRON: z.string().default("0 */6 * * *").describe("El cron para el job de escaneo de códigos de descuento"),
 
