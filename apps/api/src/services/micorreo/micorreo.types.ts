@@ -4,7 +4,7 @@
 
 export interface MiCorreoTokenResponse {
     token: string;
-    expires: string;
+    expire: string; // La API devuelve "expire" (sin 's')
 }
 
 export interface MiCorreoAuthError {

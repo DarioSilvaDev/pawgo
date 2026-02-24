@@ -17,17 +17,14 @@ export class MiCorreoAuthService {
      * Obtiene un token JWT válido (usa cache si está disponible)
      */
     async getToken(): Promise<string> {
-        // Verificar si hay token en cache y es válido
         if (this.isTokenValid()) {
             console.log("🔑 [MiCorreoAuth] Usando token en cache");
             return this.tokenCache!.token;
         }
 
-        // Obtener nuevo token
         console.log("🔑 [MiCorreoAuth] Obteniendo nuevo token...");
         const tokenData = await this.fetchNewToken();
 
-        // Cachear token
         if (miCorreoConfig.tokenCache.enabled) {
             this.cacheToken(tokenData);
         }
@@ -58,7 +55,7 @@ export class MiCorreoAuthService {
         }
 
         const data = (await response.json()) as MiCorreoTokenResponse;
-        console.log(`✅ [MiCorreoAuth] Token obtenido. Expira: ${data.expires}`);
+        console.log(`✅ [MiCorreoAuth] Token obtenido. expire: "${data.expire}"`);
         return data;
     }
 
@@ -66,7 +63,7 @@ export class MiCorreoAuthService {
      * Cachea el token con buffer de tiempo
      */
     private cacheToken(tokenData: MiCorreoTokenResponse): void {
-        const expiresAt = this.parseExpiresDate(tokenData.expires);
+        const expiresAt = this.parseExpireDate(tokenData.expire);
 
         // Restar buffer para renovar antes de expiración
         expiresAt.setSeconds(expiresAt.getSeconds() - miCorreoConfig.tokenCache.ttlBuffer);
@@ -80,33 +77,31 @@ export class MiCorreoAuthService {
     }
 
     /**
-     * Parsea el campo `expires` de la respuesta de MiCorreo.
-     * La API puede devolver distintos formatos (ISO 8601, dd/mm/yyyy hh:mm:ss, etc.).
+     * Parsea el campo `expire` de la respuesta de MiCorreo.
+     * La API puede devolver distintos formatos (ISO 8601, dd/mm/yyyy hh:mm:ss, Unix epoch).
      * Si el valor no es parseable, usa un fallback de 1 hora.
      */
-    private parseExpiresDate(expires: string): Date {
-        console.log(`🕒 [MiCorreoAuth] Parseando expires: "${expires}"`);
+    private parseExpireDate(expire: string | undefined): Date {
+        console.log(`🕒 [MiCorreoAuth] Parseando expire: "${expire}"`);
 
-        // Intento 1: ISO 8601 estándar — funciona directo con new Date()
-        const direct = new Date(expires);
+        if (!expire) {
+            console.warn("⚠️ [MiCorreoAuth] Campo expire ausente en la respuesta. Usando fallback de 1 hora.");
+            return new Date(Date.now() + 60 * 60 * 1000);
+        }
+
+        // Intento 1: ISO 8601 estándar
+        const direct = new Date(expire);
         if (!isNaN(direct.getTime())) {
             return direct;
         }
 
-        // Intento 2: formato dd/mm/yyyy hh:mm:ss (común en APIs argentinas)
-        // Ejemplo: "24/02/2026 15:30:00"
-        const ddmmyyyy = expires.match(
-            /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/
-        );
+        // Intento 2: dd/mm/yyyy hh:mm:ss (formato común en Argentina)
+        const ddmmyyyy = expire.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
         if (ddmmyyyy) {
             const [, day, month, year, hour, min, sec] = ddmmyyyy;
             const parsed = new Date(
-                Number(year),
-                Number(month) - 1,
-                Number(day),
-                Number(hour),
-                Number(min),
-                Number(sec)
+                Number(year), Number(month) - 1, Number(day),
+                Number(hour), Number(min), Number(sec)
             );
             if (!isNaN(parsed.getTime())) {
                 console.log(`✅ [MiCorreoAuth] Fecha parseada como dd/mm/yyyy: ${parsed.toISOString()}`);
@@ -114,8 +109,8 @@ export class MiCorreoAuthService {
             }
         }
 
-        // Intento 3: timestamp en segundos (Unix epoch)
-        const asNumber = Number(expires);
+        // Intento 3: Unix timestamp en segundos
+        const asNumber = Number(expire);
         if (!isNaN(asNumber) && asNumber > 0) {
             const fromEpoch = new Date(asNumber * 1000);
             if (!isNaN(fromEpoch.getTime())) {
@@ -125,9 +120,7 @@ export class MiCorreoAuthService {
         }
 
         // Fallback: token válido por 1 hora
-        console.warn(
-            `⚠️ [MiCorreoAuth] No se pudo parsear expires="${expires}". Usando fallback de 1 hora.`
-        );
+        console.warn(`⚠️ [MiCorreoAuth] No se pudo parsear expire="${expire}". Usando fallback de 1 hora.`);
         return new Date(Date.now() + 60 * 60 * 1000);
     }
 
