@@ -1,5 +1,6 @@
 import { PrismaClient, Prisma } from "@prisma/client";
 import { StorageService } from "./storage.service.js";
+import { envs } from "../config/envs.js";
 
 const prisma = new PrismaClient();
 
@@ -48,6 +49,45 @@ export class ProductService {
    */
   constructor(private readonly storageService: StorageService) { }
 
+  private extractStorageKey(value: string): string | null {
+    if (!value) return null;
+
+    // If it already looks like a key (no scheme), keep it as-is.
+    if (!value.startsWith("http://") && !value.startsWith("https://")) {
+      return value;
+    }
+
+    try {
+      const url = new URL(value);
+      const path = url.pathname || "";
+
+      // Backblaze public URL format: /file/<bucket>/<key>
+      const b2FilePrefix = `/file/${envs.B2_BUCKET}/`;
+      if (path.startsWith(b2FilePrefix)) {
+        return decodeURIComponent(path.slice(b2FilePrefix.length));
+      }
+
+      // S3-style path format: /<bucket>/<key>
+      const s3PathPrefix = `/${envs.B2_BUCKET}/`;
+      if (path.startsWith(s3PathPrefix)) {
+        return decodeURIComponent(path.slice(s3PathPrefix.length));
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async resolveImageUrl(value: string): Promise<string> {
+    const key = this.extractStorageKey(value);
+    if (!key) {
+      // If we can't extract a key, return original value (could be a stable public URL)
+      return value;
+    }
+    return this.storageService.getSignedUrl(key);
+  }
+
   async getAll(filters?: { isActive?: boolean; search?: string }) {
     const where: Prisma.ProductWhereInput = {};
 
@@ -74,11 +114,10 @@ export class ProductService {
     return Promise.all(products.map(async (product) => {
       return {
         ...product,
-        images: product.images.length > 0
-          ? await Promise.all(product.images.map((key) =>
-            this.storageService.getSignedUrl(key)
-          ))
-          : [],
+        images:
+          product.images.length > 0
+            ? await Promise.all(product.images.map((value) => this.resolveImageUrl(value)))
+            : [],
       };
     }));
   }
@@ -87,7 +126,7 @@ export class ProductService {
    * Get product by ID
    */
   async getById(id: string) {
-    return prisma.product.findUnique({
+    const product = await prisma.product.findUnique({
       where: { id },
       include: {
         variants: {
@@ -95,6 +134,16 @@ export class ProductService {
         },
       },
     });
+
+    if (!product) return null;
+
+    return {
+      ...product,
+      images:
+        product.images.length > 0
+          ? await Promise.all(product.images.map((value) => this.resolveImageUrl(value)))
+          : [],
+    };
   }
 
   /**
@@ -137,7 +186,7 @@ export class ProductService {
         basePrice: data.basePrice,
         launchPrice: data.launchPrice,
         currency: data.currency || "ARS",
-        images: data.images || [],
+        images: (data.images || []).map((value) => this.extractStorageKey(value) ?? value),
         isActive: data.isActive !== undefined ? data.isActive : true,
         variants: data.variants
           ? {
@@ -193,7 +242,9 @@ export class ProductService {
     if (data.launchPrice !== undefined)
       updateData.launchPrice = data.launchPrice;
     if (data.currency !== undefined) updateData.currency = data.currency;
-    if (data.images !== undefined) updateData.images = data.images;
+    if (data.images !== undefined) {
+      updateData.images = data.images.map((value) => this.extractStorageKey(value) ?? value);
+    }
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
     return prisma.product.update({

@@ -16,7 +16,8 @@ const createProductSchema = z.object({
     .optional()
     .nullable(),
   currency: z.string().optional().default("ARS"),
-  images: z.array(z.string().url()).optional(),
+  // Images are stored as storage keys. The API may also receive URLs (signed/public) and will normalize.
+  images: z.array(z.string().min(1)).optional(),
   isActive: z.boolean().optional().default(true),
   variants: z
     .array(
@@ -42,7 +43,8 @@ const updateProductSchema = z.object({
     .optional()
     .nullable(),
   currency: z.string().optional(),
-  images: z.array(z.string().url()).optional(),
+  // Images are stored as storage keys. The API may also receive URLs (signed/public) and will normalize.
+  images: z.array(z.string().min(1)).optional(),
   isActive: z.boolean().optional(),
 });
 
