@@ -185,28 +185,6 @@ export class OrderService {
       finalOrder = await this.applyDiscountCode(order.id, data.discountCode);
     }
 
-    // Send order confirmation email if lead exists
-    if (finalOrder.leadId) {
-      try {
-        const lead = await prisma.lead.findUnique({
-          where: { id: finalOrder.leadId },
-        });
-
-        if (lead && lead.email) {
-          await emailService.sendOrderConfirmation(
-            lead.email,
-            lead.name || "Cliente",
-            finalOrder.id,
-            prismaNumber(prismaDecimal(finalOrder.total)),
-            finalOrder.currency
-          );
-        }
-      } catch (error) {
-        console.error("Error sending order confirmation email:", error);
-        // Don't fail order creation if email fails
-      }
-    }
-
     return finalOrder;
   }
 
@@ -508,18 +486,27 @@ export class OrderService {
       }
     }
 
-    // Send email notification when order is paid
-    if (status === "paid" && updatedOrder.lead) {
+    // Send email notification when order is paid or cancelled
+    console.log("🚀 ~ OrderService ~ updateStatus ~ updatedOrder:", updatedOrder)
+    if (updatedOrder.lead) {
       try {
-        await emailService.sendOrderConfirmation(
-          updatedOrder.lead.email,
-          updatedOrder.lead.name || "Cliente",
-          updatedOrder.id,
-          prismaNumber(prismaDecimal(updatedOrder.total)),
-          updatedOrder.currency
-        );
+        if (status === "paid") {
+          await emailService.sendOrderConfirmation(
+            updatedOrder.lead.email,
+            updatedOrder.lead.name || "Cliente",
+            updatedOrder.id,
+            prismaNumber(prismaDecimal(updatedOrder.total)),
+            updatedOrder.currency
+          );
+        } else if (status === "cancelled") {
+          await emailService.sendOrderPaymentProblem(
+            updatedOrder.lead.email,
+            updatedOrder.lead.name || "Cliente",
+            updatedOrder.id
+          );
+        }
       } catch (error) {
-        console.error("Error sending order paid confirmation email:", error);
+        console.error("Error sending order status email:", error);
         // Don't fail status update if email fails
       }
     }

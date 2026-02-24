@@ -724,7 +724,7 @@ export class EmailService {
   }
 
   /**
-   * Send order confirmation to customer
+   * Send order confirmation to customer (pago aprobado)
    */
   async sendOrderConfirmation(
     email: string,
@@ -765,6 +765,7 @@ export class EmailService {
     )}</p>
               </div>
               <p>Tu orden ha sido confirmada y será procesada próximamente. Te notificaremos cuando sea enviada.</p>
+              <p><strong>Gracias por confiar en nosotros.</strong> 💙</p>
             </div>
             <div class="footer">
               <p>© 2026 PawGo. Todos los derechos reservados.</p>
@@ -774,10 +775,62 @@ export class EmailService {
       </html>
     `;
 
-    await this.sendViaNodemailer({
-      from: "ventas",
+    await this.sendViaResend({
       to: email,
       subject: `Orden confirmada #${orderId.slice(0, 8)} - PawGo`,
+      html,
+    });
+  }
+
+  /**
+   * Send order payment problem / cancellation notification to customer
+   */
+  async sendOrderPaymentProblem(
+    email: string,
+    name: string,
+    orderId: string,
+    reason?: string
+  ): Promise<void> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .header img { max-width: 200px; height: auto; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+            .warning-box { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            ${getEmailHeader()}
+            <div class="content">
+              <h2>Problema con tu pago</h2>
+              <p>Hola ${name},</p>
+              <div class="warning-box">
+                <p style="margin: 0;"><strong>Hubo un problema al procesar el pago de tu orden.</strong></p>
+              </div>
+              <p><strong>Número de orden:</strong> ${orderId}</p>
+              ${reason ? `<p><strong>Detalle:</strong> ${reason}</p>` : ""}
+              <p>Tu pedido fue cancelado automáticamente. Si crees que se trata de un error o querés volver a intentarlo, podes realizar una nueva compra desde nuestra web.</p>
+              <p>Si tenés alguna duda, respondé a este email y te ayudamos.</p>
+            </div>
+            <div class="footer">
+              <p>© 2026 PawGo. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendViaResend({
+      to: email,
+      subject: `Problema con tu pago - Orden #${orderId.slice(0, 8)} - PawGo`,
       html,
     });
   }
