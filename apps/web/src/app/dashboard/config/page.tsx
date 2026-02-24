@@ -2,6 +2,7 @@
 
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { CTAConfigForm } from "@/components/admin/CTAConfigForm";
+import { MiCorreoSetup } from "@/components/admin/MiCorreoSetup";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -22,7 +23,7 @@ export default function ConfigPage() {
 
     return (
         <DashboardLayout>
-            <div className="space-y-6">
+            <div className="space-y-8">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">Configuración del Sistema</h1>
                     <p className="mt-2 text-sm text-gray-600">
@@ -30,8 +31,14 @@ export default function ConfigPage() {
                     </p>
                 </div>
 
+                {/* CTA Config */}
                 <div className="max-w-2xl">
                     <CTAConfigForm />
+                </div>
+
+                {/* MiCorreo Setup */}
+                <div className="max-w-3xl">
+                    <MiCorreoSetup />
                 </div>
             </div>
         </DashboardLayout>

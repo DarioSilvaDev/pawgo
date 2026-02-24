@@ -66,10 +66,22 @@ export function createOrderController(
         const order = await orderService.create(body as CreateOrderDto);
 
         // Calculate shipping cost in background (doesn't affect response)
-        if (order.shippingAddress) {
+        if (isAddress(order.shippingAddress)) {
+          request.log.info(
+            { orderId: order.id, zipCode: (order.shippingAddress as any).zipCode },
+            "[Order] Dispatching background shipping cost calculation"
+          );
           orderService.calculateShippingCost(order.id).catch((error) => {
-            console.error(`Error calculating shipping for order ${order.id}:`, error);
+            request.log.error(
+              { err: error, orderId: order.id },
+              "[Order] Error calculating shipping cost"
+            );
           });
+        } else {
+          request.log.info(
+            { orderId: order.id, shippingAddressRaw: order.shippingAddress },
+            "[Order] No valid shippingAddress — skipping shipping cost calculation"
+          );
         }
 
         reply.status(201).send(order);

@@ -196,6 +196,7 @@ await fastify.register(configRoutes, {
 await fastify.register(miCorreoRoutes, {
   prefix: "/api",
   miCorreoService,
+  tokenService,
 });
 await fastify.register(leadNotificationRoutes, {
   prefix: "/api/admin/leads",

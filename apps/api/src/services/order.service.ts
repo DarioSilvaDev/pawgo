@@ -561,11 +561,12 @@ export class OrderService {
         where: { documentId: '33722435' },
       });
 
-      // If no customer exists, we'll need to register one
-      // For now, we'll use a generic customer ID or skip
+      // If no customer exists, we can't get a shipping quote
       if (!miCorreoCustomer) {
-        console.warn(`⚠️ [Shipping] No se encontró cliente MiCorreo para orden ${orderId}`);
-        // You might want to create a customer here or use a default one
+        console.warn(
+          `⚠️ [Shipping] No se encontró cliente MiCorreo (documentId: 33722435) para orden ${orderId}. ` +
+          `Es necesario registrar el cliente en la tabla MiCorreoCustomer.`
+        );
         return null;
       }
 
@@ -573,7 +574,7 @@ export class OrderService {
       const quote = await this.miCorreoService.getRates({
         customerId: miCorreoCustomer.customerId,
         postalCodeOrigin: shippingConfig.originPostalCode,
-        postalCodeDestination: shippingAddress.postalCode,
+        postalCodeDestination: shippingAddress.zipCode,   // ← el campo real del objeto Address
         dimensions: shippingConfig.standardPackage,
       });
 
