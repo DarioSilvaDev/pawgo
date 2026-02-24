@@ -446,7 +446,7 @@ export class OrderService {
   /**
    * Update order status
    */
-  async updateStatus(id: string, status: "pending" | "paid" | "cancelled") {
+  async updateStatus(id: string, status: OrderStatus) {
     const order = await prisma.order.findUnique({
       where: { id },
       include: { items: true },
@@ -465,7 +465,7 @@ export class OrderService {
     });
 
     // If order is paid, update stock and create commission
-    if (status === "paid") {
+    if (status === OrderStatus.paid) {
       // Update stock for each item
       for (const item of order.items) {
         if (item.productVariantId) {
@@ -490,7 +490,7 @@ export class OrderService {
     console.log("🚀 ~ OrderService ~ updateStatus ~ updatedOrder:", updatedOrder)
     if (updatedOrder.lead) {
       try {
-        if (status === "paid") {
+        if (status === OrderStatus.paid) {
           await emailService.sendOrderConfirmation(
             updatedOrder.lead.email,
             updatedOrder.lead.name || "Cliente",
@@ -498,7 +498,7 @@ export class OrderService {
             prismaNumber(prismaDecimal(updatedOrder.total)),
             updatedOrder.currency
           );
-        } else if (status === "cancelled") {
+        } else if (status === OrderStatus.cancelled) {
           await emailService.sendOrderPaymentProblem(
             updatedOrder.lead.email,
             updatedOrder.lead.name || "Cliente",

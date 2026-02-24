@@ -1,4 +1,4 @@
-import { OrderStatus } from '../enums/order-status.js';
+import { OrderStatus } from '@prisma/client';
 
 export interface Order {
     id: string;

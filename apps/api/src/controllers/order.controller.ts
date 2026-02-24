@@ -8,9 +8,9 @@ import {
 } from "../shared/index.js";
 import { OrderService } from "../services/order.service.js";
 import { MercadoPagoService } from "../services/mercadopago.service.js";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, Prisma, OrderStatus } from "@prisma/client";
 import { prismaDecimal, prismaNumber } from "../utils/decimal.js";
-import { Address, OrderStatus } from "../shared/index.js";
+import { Address } from "../shared/index.js";
 
 const prisma = new PrismaClient();
 
@@ -192,7 +192,7 @@ export function createOrderController(
           id: order.id,
           leadId: order.leadId || undefined,
           discountCodeId: order.discountCodeId || undefined,
-          status: order.status as unknown as OrderStatus,
+          status: order.status,
           subtotal: prismaNumber(prismaDecimal(order.subtotal)),
           discount: prismaNumber(prismaDecimal(order.discount)),
           shippingCost: prismaNumber(prismaDecimal(order.shippingCost)),
@@ -390,8 +390,8 @@ export function createOrderController(
           },
         });
 
-        // Update order status to "paid" - this will automatically create commissions
-        const updatedOrder = await orderService.updateStatus(order.id, "paid");
+        // Update order status to paid - this will automatically create commissions
+        const updatedOrder = await orderService.updateStatus(order.id, OrderStatus.paid);
 
         reply.status(201).send({
           order: updatedOrder,
