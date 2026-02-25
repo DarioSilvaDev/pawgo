@@ -17,6 +17,15 @@ function verifyMercadoPagoWebhookSignature(
     );
     return { valid: true, reason: "no-secret-configured" };
   }
+  console.log({
+    secret: WEBHOOK_SECRET,
+    secretLength: WEBHOOK_SECRET?.length
+  })
+
+  request.log.info({
+    secret: WEBHOOK_SECRET,
+    secretLength: WEBHOOK_SECRET?.length,
+  })
 
   const xSignature = request.headers["x-signature"];
   const xRequestId = request.headers["x-request-id"];
@@ -58,13 +67,9 @@ function verifyMercadoPagoWebhookSignature(
   // Extract data.id from query params if present
   let dataId = "";
   try {
-    const rawUrl = request.raw.url || "";
-    const url = new URL(rawUrl, "http://localhost");
-    const qpDataId =
-      url.searchParams.get("data.id") ||
-      url.searchParams.get("id");
-    if (qpDataId) {
-      dataId = qpDataId;
+    if (typeof request.query === "object" && request.query !== null) {
+      const q = request.query as Record<string, string>;
+      dataId = q["data.id"] || q["id"] || "";
     }
   } catch (err) {
     request.log.warn(
