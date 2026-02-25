@@ -64,21 +64,20 @@ function verifyMercadoPagoWebhookSignature(
     return { valid: false, reason: "invalid-signature-format" };
   }
 
-  // Extract data.id from query params if present
   let dataId = "";
-  try {
-    if (typeof request.query === "object" && request.query !== null) {
-      const q = request.query as Record<string, string>;
-      dataId = q["data.id"] || q["id"] || "";
-    }
-  } catch (err) {
-    request.log.warn(
-      { err },
-      "[Webhook] Failed to parse request URL for data.id extraction"
-    );
+
+  const body = request.body as any;
+
+  if (body?.resource) {
+    const parts = body.resource.split("/");
+    dataId = parts[parts.length - 1];
   }
 
-  // Build manifest: id:[data.id_url];request-id:[x-request-id];ts:[ts];
+  if (!dataId && request.query) {
+    const q = request.query as Record<string, string>;
+    dataId = q["data.id"] || q["id"] || "";
+  }
+
   const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
 
   request.log.debug(
