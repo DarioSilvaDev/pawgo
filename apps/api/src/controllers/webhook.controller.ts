@@ -1,103 +1,20 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import crypto from "crypto";
 import { MercadoPagoService } from "../services/mercadopago.service.js";
+import { verifyMercadoPagoSignature } from "../services/mercadopago-signature.js";
 import { OrderService } from "../services/order.service.js";
 import { OrderStatus, PaymentStatus, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
-const WEBHOOK_SECRET = process.env.MERCADOPAGO_WEBHOOK_SECRET;
 
-function verifyMercadoPagoWebhookSignature(
-  request: FastifyRequest
-): { valid: boolean; reason?: string } {
-  // If no secret is configured, log a warning and accept the webhook (useful for development)
-  if (!WEBHOOK_SECRET) {
-    request.log.warn(
-      "[Webhook] MERCADOPAGO_WEBHOOK_SECRET not configured. Skipping signature verification."
-    );
-    return { valid: true, reason: "no-secret-configured" };
-  }
-  console.log({
-    secret: WEBHOOK_SECRET,
-    secretLength: WEBHOOK_SECRET?.length
-  })
-
-  request.log.info({
-    secret: WEBHOOK_SECRET,
-    secretLength: WEBHOOK_SECRET?.length,
-  })
-
-  const xSignature = request.headers["x-signature"];
-  const xRequestId = request.headers["x-request-id"];
-
-  if (
-    !xSignature ||
-    !xRequestId ||
-    typeof xSignature !== "string" ||
-    typeof xRequestId !== "string"
-  ) {
-    request.log.warn(
-      { headers: { "x-signature": xSignature, "x-request-id": xRequestId } },
-      "[Webhook] Missing or invalid x-signature / x-request-id headers"
-    );
-    return { valid: false, reason: "missing-headers" };
-  }
-
-  const parts = xSignature.split(",");
-  let ts: string | undefined;
-  let hash: string | undefined;
-
-  for (const part of parts) {
-    const [key, value] = part.split("=", 2).map((s) => s.trim());
-    if (key === "ts") {
-      ts = value;
-    } else if (key === "v1") {
-      hash = value;
-    }
-  }
-
-  if (!ts || !hash) {
-    request.log.warn(
-      { xSignature },
-      "[Webhook] Could not extract ts/v1 from x-signature"
-    );
-    return { valid: false, reason: "invalid-signature-format" };
-  }
-
-  let dataId = "";
-
-  const body = request.body as any;
-
-  if (body?.resource) {
-    const parts = body.resource.split("/");
-    dataId = parts[parts.length - 1];
-  }
-
-  if (!dataId && request.query) {
-    const q = request.query as Record<string, string>;
-    dataId = q["data.id"] || q["id"] || "";
-  }
-
-  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
-
-  request.log.debug(
-    { manifest, dataId, xRequestId, ts },
-    "[Webhook] Signature manifest built"
-  );
-
-  const hmac = crypto.createHmac("sha256", WEBHOOK_SECRET);
-  hmac.update(manifest);
-  const computed = hmac.digest("hex");
-
-  if (computed !== hash) {
-    request.log.warn(
-      { computed, received: hash, manifest },
-      "[Webhook] HMAC signature mismatch — webhook rejected"
-    );
-    return { valid: false, reason: "hmac-mismatch" };
-  }
-
-  return { valid: true };
+interface MercadoPagoWebhookBody {
+  type: string;
+  data: {
+    id: string;
+    external_reference?: string;
+  };
+  api_version?: string;
+  action?: string;
+  resource?: string;
 }
 
 export function createWebhookController(
@@ -107,7 +24,7 @@ export function createWebhookController(
   return {
     async mercadopago(request: FastifyRequest, reply: FastifyReply) {
       // ── 1. Log raw incoming request ──────────────────────────────────────
-      const rawBody = request.body as Record<string, unknown>;
+      const rawBody = request.body as MercadoPagoWebhookBody;
       request.log.info(
         {
           body: rawBody,
@@ -123,24 +40,22 @@ export function createWebhookController(
 
       try {
         // ── 2. Signature verification ──────────────────────────────────────
-        const sigResult = verifyMercadoPagoWebhookSignature(request);
-        if (!sigResult.valid) {
-          request.log.warn(
-            { reason: sigResult.reason },
-            "[Webhook] Signature verification FAILED — returning 400"
-          );
-          reply.status(400).send({ error: "Invalid webhook signature" });
-          return;
-        }
-        request.log.info(
-          { reason: sigResult.reason },
-          "[Webhook] Signature verification PASSED"
-        );
+        const verification = verifyMercadoPagoSignature(request);
 
-        const data = rawBody as {
-          type: string;
-          data: { id: string; external_reference?: string };
-        };
+        if (!verification.valid) {
+          request.log.warn(
+            { reason: verification.reason },
+            "[Webhook] Invalid MercadoPago signature"
+          );
+          return reply.status(200).send({ ignored: true, reason: verification.reason });
+        }
+
+        if (verification.isPanelTest) {
+          request.log.info("[Webhook] MercadoPago panel test detected");
+          return reply.status(200).send({ received: true });
+        }
+
+        const data = rawBody;
 
         // ── 3. processWebhook ──────────────────────────────────────────────
         request.log.info(
