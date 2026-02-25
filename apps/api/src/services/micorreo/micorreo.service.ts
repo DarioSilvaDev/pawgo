@@ -70,10 +70,34 @@ export class MiCorreoService {
      * Valida credenciales de usuario y obtiene customerId
      */
     async validateUser(data: ValidateUserRequest): Promise<ValidateUserResponse> {
-        return this.makeAuthenticatedRequest<ValidateUserResponse>("/users/validate", {
+        const response = await this.makeAuthenticatedRequest<ValidateUserResponse>("/users/validate", {
             method: "POST",
             body: JSON.stringify(data),
         });
+
+        // Guardar/actualizar en BD local para que el sistema pueda cotizar envíos
+        try {
+            await prisma.miCorreoCustomer.upsert({
+                where: { email: data.email },
+                update: {
+                    customerId: response.customerId,
+                },
+                create: {
+                    customerId: response.customerId,
+                    email: data.email,
+                    firstName: "",
+                    lastName: "",
+                    documentType: "DNI",
+                    documentId: "",
+                },
+            });
+            console.log(`💾 [MiCorreo] Cliente upserted en BD: ${response.customerId}`);
+        } catch (error) {
+            console.warn("⚠️ [MiCorreo] Error al guardar en BD:", error);
+            // No fallar — la validación fue exitosa
+        }
+
+        return response;
     }
 
     // ============================================
@@ -198,8 +222,9 @@ export class MiCorreoService {
     ): Promise<T> {
         try {
             const token = await this.authService.getToken();
+            const url = `${miCorreoConfig.baseUrl}${endpoint}`;
 
-            const response = await fetch(`${miCorreoConfig.baseUrl}${endpoint}`, {
+            const response = await fetch(url, {
                 ...options,
                 headers: {
                     Authorization: `Bearer ${token}`,

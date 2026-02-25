@@ -60,9 +60,11 @@ function verifyMercadoPagoWebhookSignature(
   try {
     const rawUrl = request.raw.url || "";
     const url = new URL(rawUrl, "http://localhost");
-    const qpDataId = url.searchParams.get("data.id");
+    const qpDataId =
+      url.searchParams.get("data.id") ||
+      url.searchParams.get("id");
     if (qpDataId) {
-      dataId = qpDataId.toLowerCase();
+      dataId = qpDataId;
     }
   } catch (err) {
     request.log.warn(
@@ -72,13 +74,7 @@ function verifyMercadoPagoWebhookSignature(
   }
 
   // Build manifest: id:[data.id_url];request-id:[x-request-id];ts:[ts];
-  const partsManifest: string[] = [];
-  if (dataId) {
-    partsManifest.push(`id:${dataId}`);
-  }
-  partsManifest.push(`request-id:${xRequestId}`);
-  partsManifest.push(`ts:${ts}`);
-  const manifest = `${partsManifest.join(";")};`;
+  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
 
   request.log.debug(
     { manifest, dataId, xRequestId, ts },
@@ -153,7 +149,7 @@ export function createWebhookController(
         if (!result) {
           request.log.warn(
             { type: data.type, paymentId: data?.data?.id },
-            "[Webhook] processWebhook returned null — ignoring notification"
+            "[Webhook] processWebhook returned null — notification ignored or not a payment type"
           );
           reply.status(200).send({ received: true });
           return;
@@ -161,13 +157,14 @@ export function createWebhookController(
 
         request.log.info(
           { paymentId: result.paymentId, status: result.status, orderId: result.orderId },
-          "[Webhook] processWebhook result"
+          "[Webhook] processWebhook success, looking for order/payment records"
         );
 
         // ── 4. Locate the payment record ───────────────────────────────────
         let payment = null;
 
         if (result.orderId) {
+          request.log.info({ orderId: result.orderId }, "[Webhook] Searching order by orderId");
           const order = await prisma.order.findUnique({
             where: { id: result.orderId },
             include: {
@@ -187,14 +184,15 @@ export function createWebhookController(
             );
           } else {
             request.log.warn(
-              { orderId: result.orderId },
-              "[Webhook] Order not found or has no payments"
+              { orderId: result.orderId, orderExists: !!order, paymentCount: order?.payments.length },
+              "[Webhook] Order not found or has no payments for the given orderId"
             );
           }
         }
 
-        // Fallback: find by mercadoPagoPaymentId (on webhook retries)
+        // Fallback: find by mercadoPagoPaymentId (on webhook retries or if external_reference was missing)
         if (!payment) {
+          request.log.info({ mercadoPagoPaymentId: result.paymentId }, "[Webhook] Fallback: Searching payment by mercadoPagoPaymentId");
           payment = await prisma.payment.findFirst({
             where: { mercadoPagoPaymentId: result.paymentId },
             include: { order: true },
@@ -209,9 +207,9 @@ export function createWebhookController(
         }
 
         if (!payment) {
-          request.log.warn(
+          request.log.error(
             { mercadoPagoPaymentId: result.paymentId, orderId: result.orderId },
-            "[Webhook] Payment record NOT FOUND — cannot update order status"
+            "[Webhook] CRITICAL: Payment record NOT FOUND in database. Status cannot be updated."
           );
           reply.status(200).send({ received: true });
           return;

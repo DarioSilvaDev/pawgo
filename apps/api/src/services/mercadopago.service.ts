@@ -202,6 +202,11 @@ export class MercadoPagoService {
 
       try {
         const payment = await paymentClient.get({ id: paymentId });
+        console.log(`[MercadoPago] Fetched payment details for ${paymentId}:`, {
+          status: payment.status,
+          external_reference: payment.external_reference,
+          has_metadata: !!payment.metadata,
+        });
 
         // Extract orderId from external_reference or metadata
         if (!orderId && payment.external_reference) {
@@ -214,8 +219,11 @@ export class MercadoPagoService {
         const paymentStatus = await this.getPaymentStatus(paymentId);
 
         if (!paymentStatus) {
+          console.warn(`[MercadoPago] Could not get status for payment ${paymentId}`);
           return null;
         }
+
+        console.log(`[MercadoPago] Webhook resolve: paymentId=${paymentId}, status=${paymentStatus.status}, orderId=${orderId}`);
 
         return {
           paymentId,
@@ -223,7 +231,7 @@ export class MercadoPagoService {
           orderId,
         };
       } catch (error) {
-        console.error("Error getting payment details:", error);
+        console.error(`[MercadoPago] Error getting payment details for ${paymentId}:`, error);
         // Fallback: try to get status anyway
         const paymentStatus = await this.getPaymentStatus(paymentId);
         if (!paymentStatus) {
@@ -237,6 +245,7 @@ export class MercadoPagoService {
       }
     }
 
+    console.log(`[MercadoPago] Ignoring webhook type: ${data.type}`);
     return null;
   }
 
