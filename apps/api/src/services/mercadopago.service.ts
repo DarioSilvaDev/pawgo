@@ -103,7 +103,7 @@ export class MercadoPagoService {
         pending: pendingUrl,
       },
       external_reference: order.id,
-      notification_url: `${envs.API_URL}/api/webhooks/mercadopago`,
+      notification_url: `${envs.API_URL}/api/webhooks/mercadopago?source_news=webhooks`,
       statement_descriptor: "PAWGO",
       metadata: {
         order_id: order.id,
