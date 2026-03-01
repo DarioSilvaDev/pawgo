@@ -9,6 +9,7 @@
  * - Cada handler es idempotente (usa EmailLog para no enviar duplicados)
  */
 
+import { PgBoss } from "pg-boss";
 import { eventDispatcher } from "../services/event-dispatcher.service.js";
 import { emailService } from "../services/email.service.js";
 import {
@@ -19,8 +20,9 @@ import {
     type ShipmentCreatedPayload,
     type ShipmentDeliveredPayload,
 } from "../shared/events.js";
+import { JOB_REVIEW_REMINDER } from "../jobs/review-reminder.job.js";
 
-export function bootstrapOrderEvents(): void {
+export function bootstrapOrderEvents(boss: PgBoss): void {
     console.log("[EventBootstrap] Registering order event handlers...");
 
     // ── PAYMENT_APPROVED → Order Confirmation Email ──────────────
@@ -101,6 +103,21 @@ export function bootstrapOrderEvents(): void {
                 orderId,
                 trackingNumber: trackingNumber ?? "—",
             });
+
+            // ── Schedule Review Reminder (7 days later) ──────────
+            try {
+                await boss.send(
+                    JOB_REVIEW_REMINDER,
+                    { orderId, email: leadEmail, name: leadName },
+                    {
+                        startAfter: 7 * 24 * 60 * 60, // 7 days in seconds
+                        singletonKey: `review-reminder:${orderId}`,
+                    }
+                );
+                console.log(`[EventBootstrap] Scheduled 7-day review reminder job for order ${orderId}`);
+            } catch (err) {
+                console.error(`[EventBootstrap] Failed to schedule review reminder for order ${orderId}:`, err);
+            }
         }
     );
 

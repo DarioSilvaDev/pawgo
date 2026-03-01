@@ -65,6 +65,12 @@ enum DiscountType {
   fixed      @map("fixed")
 }
 
+enum ReviewStatus {
+  pending  @map("pending")
+  approved @map("approved")
+  rejected @map("rejected")
+}
+
 enum DiscountCodeType {
   influencer       @map("influencer")
   lead_reservation @map("lead_reservation")
@@ -95,6 +101,7 @@ model Lead {
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
   orders                    Order[]
+  reviews                   Review[]
   miCorreoCustomer          MiCorreoCustomer?
   reservationDiscountCode   DiscountCode? @relation("LeadReservationCode", fields: [reservationDiscountCodeId], references: [id], onDelete: SetNull)
 
@@ -388,6 +395,7 @@ model Order {
   commission   Commission?
   shipment     Shipment?
   eventLogs    OrderEventLog[]
+  review       Review?
 
   @@index([discountCodeId])
   @@index([leadId])
@@ -712,4 +720,58 @@ model ShippingAnalytics {
   @@index([postalCode])
   @@index([createdAt])
   @@map("shipping_analytics")
+}
+
+// ============================================
+// Comunidad PawGo — Reviews
+// ============================================
+
+model Review {
+  id     String @id @default(cuid())
+
+  // Relaciones con datos existentes
+  orderId String @unique // 1 reseña por orden (hard constraint)
+  leadId  String?        // FK a Lead (puede ser null si lead fue eliminado)
+  email   String @unique // 1 reseña por email (principal barrera anti-duplicado)
+
+  // Contenido
+  petName   String
+  rating    Int    // 1-5
+  comment   String
+  imageUrl  String? // Key B2 de la imagen (ej: "resenas/user-timestamp-photo.jpg")
+
+  // Consentimiento de marketing (opcional)
+  photoConsent Boolean   @default(false)
+  consentedAt  DateTime? @db.Timestamptz(3)
+
+  // Moderación
+  status         ReviewStatus @default(pending)
+  isApproved     Boolean      @default(false) // Shortcut para queries públicas rápidas
+  isFeatured     Boolean      @default(false) // Para Mascota del Mes / Destacadas
+  rejectedReason String?
+  moderatedBy    String?      // authId del admin que moderó
+  approvedAt     DateTime?    @db.Timestamptz(3)
+  rejectedAt     DateTime?    @db.Timestamptz(3)
+
+  // Verificación de compra (siempre true si pasó validate-email)
+  purchaseVerified Boolean @default(true)
+
+  // Anti-spam / Auditoría
+  ipAddress     String?
+  userAgent     String?
+  submittedFrom String?  // "qr_card" | "web_direct" | "reminder_email"
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  order Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  lead  Lead?  @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([isApproved])
+  @@index([isFeatured])
+  @@index([rating])
+  @@index([leadId])
+  @@index([createdAt])
+  @@map("reviews")
 }

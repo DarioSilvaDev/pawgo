@@ -5,7 +5,7 @@ import { envs } from "../config/envs.js";
 /**
  * Tipos de documento soportados por el sistema
  */
-export type DocumentType = "INVOICES" | "PAYMENT_PROOFS" | "CONTENT" | "PRODUCTS";
+export type DocumentType = "INVOICES" | "PAYMENT_PROOFS" | "CONTENT" | "PRODUCTS" | "REVIEW_IMAGES";
 
 /**
  * Configuración para cada tipo de documento
@@ -45,6 +45,12 @@ const DOCUMENT_TYPE_CONFIG: Record<DocumentType, DocumentTypeConfig> = {
     allowedMimeTypes: ["image/png", "image/jpeg", "image/jpg", "image/webp"],
     maxFileSize: 5 * 1024 * 1024, // 5MB para imágenes de productos
     description: "imágenes de productos",
+  },
+  REVIEW_IMAGES: {
+    folder: "resenas",
+    allowedMimeTypes: ["image/jpeg", "image/png", "image/jpg", "image/webp"],
+    maxFileSize: 5 * 1024 * 1024, // 5MB para fotos de mascotas
+    description: "fotos de reseñas de mascotas",
   },
 };
 

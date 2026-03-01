@@ -1115,6 +1115,131 @@ export class EmailService {
       html,
     });
   }
+
+  /**
+   * Send review approved notification to customer
+   * Triggered when admin approves a review in the moderation panel
+   */
+  async sendReviewApprovedNotification(
+    email: string,
+    petName: string
+  ): Promise<void> {
+    const communityUrl = `${FRONTEND_URL}/comunidad`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .header img { max-width: 200px; height: auto; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+            .hero { background: linear-gradient(135deg, #00CED1 0%, #0099a8 100%); border-radius: 12px; padding: 30px 20px; text-align: center; margin: 0 0 24px 0; }
+            .hero h1 { color: white; margin: 0 0 8px 0; font-size: 26px; }
+            .hero p { color: rgba(255,255,255,0.9); margin: 0; font-size: 16px; }
+            .paw-box { font-size: 48px; text-align: center; margin: 20px 0; }
+            .success-box { background-color: #d4edda; border-left: 4px solid #28a745; padding: 16px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+            .button { display: inline-block; padding: 14px 32px; background-color: #00CED1; color: white !important; text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: bold; font-size: 16px; }
+            .footer { text-align: center; margin-top: 24px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            ${getEmailHeader()}
+            <div class="content">
+              <div class="hero">
+                <h1>🐾 ¡${petName} ya es parte de la Comunidad PawGo!</h1>
+                <p>Tu reseña está publicada para que todos la vean</p>
+              </div>
+              <div class="paw-box">🌟</div>
+              <div class="success-box">
+                <p style="margin: 0;"><strong>✅ ¡Tu reseña fue aprobada!</strong></p>
+              </div>
+              <p>Gracias por compartir la experiencia de <strong>${petName}</strong> con el pretal PawGo. Tu reseña ayuda a otras familias a tomar la mejor decisión para sus mascotas.</p>
+              <p>Ahora podés verla en nuestra galería de la comunidad junto a otros peludos increíbles. 🐕🐈</p>
+              <div style="text-align: center;">
+                <a href="${communityUrl}" class="button">Ver mi reseña en la Comunidad 🐾</a>
+              </div>
+              <p style="margin-top: 24px;">¡Gracias por ser parte de la familia PawGo!</p>
+              <p><strong>El equipo de PawGo</strong> 💙</p>
+            </div>
+            <div class="footer">
+              <p>© 2026 PawGo. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendViaResend({
+      to: email,
+      subject: `🐾 ¡${petName} ya es parte de la Comunidad PawGo!`,
+      html,
+    });
+  }
+
+  /**
+   * Send 7-day post-delivery reminder to leave a review
+   * Triggered by a background job 7 days after order status = 'delivered'
+   */
+  async sendReviewReminderNotification(
+    email: string,
+    name?: string
+  ): Promise<void> {
+    const communityUrl = `${FRONTEND_URL}/comunidad?email=${encodeURIComponent(email)}`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .header img { max-width: 200px; height: auto; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+            .highlight-box { background-color: #e7f3ff; border-left: 4px solid #00CED1; padding: 16px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+            .button { display: inline-block; padding: 14px 32px; background-color: #00CED1; color: white !important; text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: bold; font-size: 16px; }
+            .paw-row { font-size: 28px; text-align: center; margin: 20px 0; letter-spacing: 8px; }
+            .footer { text-align: center; margin-top: 24px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            ${getEmailHeader()}
+            <div class="content">
+              <h2>¿Cómo le quedó el PawGo a tu peludo? 🐾</h2>
+              <p>Hola${name ? ` ${name}` : ""},</p>
+              <p>¡Ya pasó una semana desde que recibiste tu pretal PawGo! Queremos saber cómo les está yendo a vos y a tu mascota.</p>
+              <div class="paw-row">🐕 🐾 🌟</div>
+              <div class="highlight-box">
+                <p style="margin: 0;"><strong>Tu opinión es muy importante para nosotros</strong></p>
+                <p style="margin: 8px 0 0 0;">Compartí tu experiencia y ayudá a otras familias a elegir el mejor pretal para su mascota. Solo te lleva 2 minutos.</p>
+              </div>
+              <div style="text-align: center;">
+                <a href="${communityUrl}" class="button">Compartir mi experiencia 🐾</a>
+              </div>
+              <p style="color: #888; font-size: 13px;">Si ya dejaste tu reseña, ignorá este mensaje. Este es el único recordatorio que te enviaremos. 💙</p>
+              <p><strong>El equipo de PawGo</strong></p>
+            </div>
+            <div class="footer">
+              <p>© 2026 PawGo. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendViaResend({
+      to: email,
+      subject: "¿Cómo le quedó el PawGo a tu peludo? 🐾 Contanos tu experiencia",
+      html,
+    });
+  }
 }
 
 // Export singleton instance

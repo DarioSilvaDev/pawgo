@@ -4,6 +4,8 @@ import { Benefits } from "@/components/sections/Benefits";
 import { LaunchStatus } from "@/components/sections/LaunchStatus";
 import { PageViewTracker } from "@/components/PageViewTracker";
 
+import { Footer } from "@/components/Footer";
+
 export default function Home() {
   return (
     <main className="min-h-screen">
@@ -12,6 +14,7 @@ export default function Home() {
       <Product />
       <Benefits />
       <LaunchStatus />
+      <Footer />
     </main>
   );
 }

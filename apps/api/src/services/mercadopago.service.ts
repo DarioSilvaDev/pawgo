@@ -2,7 +2,7 @@ import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
 import { Order, OrderItem } from "../shared/index.js";
 import { envs } from "../config/envs.js";
 
-const ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN || "";
+const ACCESS_TOKEN = envs.MERCADOPAGO_ACCESS_TOKEN || "";
 
 if (!ACCESS_TOKEN) {
   console.warn(

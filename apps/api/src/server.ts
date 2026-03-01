@@ -20,6 +20,8 @@ import { geoRoutes } from "./routes/geo.routes.js";
 import { configRoutes } from "./routes/config.routes.js";
 import { miCorreoRoutes } from "./routes/micorreo/index.js";
 import { leadNotificationRoutes } from "./routes/lead-notification.routes.js";
+import { reviewRoutes } from "./routes/review.routes.js";
+import { registerReviewReminderWorker } from "./jobs/review-reminder.job.js";
 import { TokenService } from "./auth/services/token.service.js";
 import { AuthService } from "./auth/services/auth.service.js";
 import { DiscountCodeService } from "./services/discount-code.service.js";
@@ -63,7 +65,7 @@ await fastify.register(cors, {
       ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-submission-source"],
 });
 
 // JWT Plugin
@@ -100,8 +102,8 @@ const uploadController = new UploadController(
   influencerPaymentService
 );
 
-// Bootstrap domain event handlers (email notifications, etc.)
-bootstrapOrderEvents();
+// Domain events are now bootstrapped after pg-boss starts
+// bootstrapOrderEvents();
 
 // Initialize pg-boss for background jobs
 const boss = new PgBoss({
@@ -115,6 +117,12 @@ boss.on("error", (err) => {
 
 await boss.start();
 console.log("[api] pg-boss started");
+
+// Register background job workers
+await registerReviewReminderWorker(boss);
+
+// Bootstrap domain event handlers with boss access
+bootstrapOrderEvents(boss);
 
 const leadNotificationController = new LeadNotificationController(boss);
 
@@ -206,6 +214,11 @@ await fastify.register(leadNotificationRoutes, {
   prefix: "/api/admin/leads",
   controller: leadNotificationController,
   tokenService,
+});
+await fastify.register(reviewRoutes, {
+  prefix: "/api",
+  tokenService,
+  storageService,
 });
 
 // Note: Files are now served from Backblaze B2, not from local filesystem

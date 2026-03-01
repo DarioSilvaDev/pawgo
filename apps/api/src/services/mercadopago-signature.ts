@@ -20,7 +20,6 @@ export function verifyMercadoPagoSignature(
 ): VerificationResult {
     const xSignature = request.headers["x-signature"];
     const xRequestId = request.headers["x-request-id"];
-    const userAgent = request.headers["user-agent"] || "";
 
     const body = request.body as any;
 
@@ -41,17 +40,6 @@ export function verifyMercadoPagoSignature(
 
     if (typeof xSignature !== "string" || typeof xRequestId !== "string") {
         return { valid: false, reason: "invalid-headers-type" };
-    }
-
-    // --------------------------------------------------
-    // 2️⃣ Enforce Feed v2 user-agent
-    // --------------------------------------------------
-    if (!userAgent.includes("Feed")) {
-        request.log.warn(
-            { userAgent },
-            "[Webhook] Unsupported notification type (not Feed v2)"
-        );
-        return { valid: false, reason: "not-feed-v2" };
     }
 
     // --------------------------------------------------
@@ -76,14 +64,8 @@ export function verifyMercadoPagoSignature(
     // --------------------------------------------------
     let dataId = "";
 
-    // merchant_order format
-    if (body?.resource) {
-        const segments = body.resource.split("/");
-        dataId = segments[segments.length - 1];
-    }
-
     // payment format
-    if (!dataId && request.query) {
+    if (request.query) {
         const q = request.query as Record<string, string>;
         dataId = q["data.id"] || q["id"] || "";
     }
@@ -92,44 +74,32 @@ export function verifyMercadoPagoSignature(
         return { valid: false, reason: "missing-data-id" };
     }
 
-    // --------------------------------------------------
-    // 5️⃣ Build manifest
-    // --------------------------------------------------
     const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
 
-    // --------------------------------------------------
-    // 6️⃣ Compute HMAC SHA256
-    // --------------------------------------------------
-    const computedHash = crypto
+    const computedBuffer = crypto
         .createHmac("sha256", WEBHOOK_SECRET)
         .update(manifest)
-        .digest("hex");
+        .digest();
 
-    // --------------------------------------------------
-    // 7️⃣ Constant-time comparison
-    // --------------------------------------------------
-    const isValid =
-        computedHash.length === receivedHash.length &&
-        crypto.timingSafeEqual(
-            Buffer.from(computedHash),
-            Buffer.from(receivedHash)
-        );
+    const receivedBuffer = Buffer.from(receivedHash, "hex");
 
-    if (!isValid) {
-        request.log.warn(
-            {
-                manifest,
-                dataId,
-            },
-            "[Webhook] HMAC verification failed"
-        );
-        return { valid: false, reason: "hmac-mismatch" };
+    if (computedBuffer.length !== receivedBuffer.length) {
+        return { valid: false };
     }
 
-    request.log.info(
-        { dataId },
-        "[Webhook] Signature verification PASSED"
-    );
+    const isValid = crypto.timingSafeEqual(computedBuffer, receivedBuffer);
 
-    return { valid: true, dataId };
+    if (isValid) {
+        request.log.info(
+            { dataId },
+            "[Webhook] Signature verification PASSED"
+        );
+        return { valid: true, dataId };
+    }
+
+    request.log.warn(
+        { manifest, dataId },
+        "[Webhook] HMAC verification failed"
+    );
+    return { valid: false, reason: "hmac-mismatch" };
 }
