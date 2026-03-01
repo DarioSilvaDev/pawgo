@@ -102,7 +102,7 @@ export class AnalyticsService {
     }, 0);
 
     // Ingresos pendientes: órdenes pendientes
-    const pendingOrdersList = orders.filter((o) => o.status === OrderStatus.pending);
+    const pendingOrdersList = orders.filter((o) => o.status === OrderStatus.awaiting_payment);
     console.log(`⏳ [Analytics] Pending orders: ${pendingOrdersList.length}`);
 
     const pendingRevenue = pendingOrdersList.reduce((sum, order) => {
@@ -114,7 +114,7 @@ export class AnalyticsService {
       return sum + orderTotal;
     }, 0);
 
-    const pendingOrders = orders.filter((o) => o.status === OrderStatus.pending).length;
+    const pendingOrders = orders.filter((o) => o.status === OrderStatus.awaiting_payment).length;
     const completedOrders = orders.filter((o) => o.status === OrderStatus.paid).length;
     const cancelledOrders = orders.filter((o) => o.status === OrderStatus.cancelled).length;
 

@@ -32,6 +32,7 @@ export interface PaymentStatus {
   statusDetail: string;
   transactionAmount: number;
   currencyId: string;
+  externalReference: string | undefined;
 }
 
 export class MercadoPagoService {
@@ -88,6 +89,7 @@ export class MercadoPagoService {
       items: MercadoPagoPreferenceItem[];
       payer: { email?: string };
       back_urls: { success: string; failure: string; pending: string };
+      auto_return: "approved" | "all";
       external_reference: string;
       notification_url: string;
       statement_descriptor: string;
@@ -102,6 +104,7 @@ export class MercadoPagoService {
         failure: failureUrl,
         pending: pendingUrl,
       },
+      auto_return: "approved", // Redirige automáticamente a back_urls.success luego del pago aprobado
       external_reference: order.id,
       notification_url: `${envs.API_URL}/api/webhooks/mercadopago?source_news=webhooks`,
       statement_descriptor: "PAWGO",
@@ -110,9 +113,8 @@ export class MercadoPagoService {
       },
     };
 
-    // Note: auto_return is removed because MercadoPago has issues with it in some configurations
-    // The user will still be redirected using back_urls after payment
-    // If you need auto_return, ensure URLs are publicly accessible (not localhost)
+    // Note: auto_return requires publicly accessible URLs (not localhost).
+    // In production, back_urls.success must be a valid HTTPS URL.
 
     try {
       console.log("[MercadoPago] Creating preference with URLs:", {
@@ -174,6 +176,7 @@ export class MercadoPagoService {
         status: payment.status || "",
         statusDetail: payment.status_detail || "",
         transactionAmount: payment.transaction_amount || 0,
+        externalReference: payment.external_reference,
         currencyId: payment.currency_id || "ARS",
       };
     } catch (error) {

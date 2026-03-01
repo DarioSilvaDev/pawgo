@@ -36,6 +36,7 @@ import { LeadController } from "./controllers/lead.controller.js";
 import { LeadNotificationController } from "./controllers/lead-notification.controller.js";
 import { UploadController } from "./controllers/upload.controller.js";
 import { PgBoss } from "pg-boss";
+import { bootstrapOrderEvents } from "./config/order-events.bootstrap.js";
 
 const fastify = Fastify({
   logger: {
@@ -98,6 +99,9 @@ const uploadController = new UploadController(
   storageService,
   influencerPaymentService
 );
+
+// Bootstrap domain event handlers (email notifications, etc.)
+bootstrapOrderEvents();
 
 // Initialize pg-boss for background jobs
 const boss = new PgBoss({

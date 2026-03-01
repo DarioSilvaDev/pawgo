@@ -2,7 +2,6 @@ import { PrismaClient, Prisma, OrderStatus } from "@prisma/client";
 import { CreateOrderDto, OrderItem } from "../shared/index.js";
 import { DiscountCodeService } from "./discount-code.service.js";
 import { CommissionService } from "./commission.service.js";
-import { emailService } from "./email.service.js";
 import {
   prismaDecimal,
   prismaNumber,
@@ -10,8 +9,29 @@ import {
 } from "../utils/decimal.js";
 import { MiCorreoService } from "./micorreo/micorreo.service.js";
 import { shippingConfig } from "../config/shipping.config.js";
-
 import { prisma } from "../config/prisma.client.js";
+import { eventDispatcher } from "./event-dispatcher.service.js";
+import {
+  OrderEventType,
+  createEvent,
+  type PaymentApprovedPayload,
+  type PaymentRejectedPayload,
+  type OrderCreatedPayload,
+} from "../shared/events.js";
+
+// ─────────────────────────────────────────────────────────────
+// State Machine — Valid Transitions
+// ─────────────────────────────────────────────────────────────
+
+const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  [OrderStatus.awaiting_payment]: [OrderStatus.paid, OrderStatus.cancelled],
+  [OrderStatus.paid]: [OrderStatus.ready_to_ship, OrderStatus.cancelled, OrderStatus.refunded],
+  [OrderStatus.ready_to_ship]: [OrderStatus.shipped],
+  [OrderStatus.shipped]: [OrderStatus.delivered],
+  [OrderStatus.delivered]: [], // terminal
+  [OrderStatus.cancelled]: [], // terminal
+  [OrderStatus.refunded]: [], // terminal
+};
 
 export class OrderService {
   private discountCodeService: DiscountCodeService;
@@ -28,58 +48,62 @@ export class OrderService {
     this.miCorreoService = miCorreoService;
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // State Machine Guard
+  // ─────────────────────────────────────────────────────────────
+
   /**
-   * Create a new order
+   * Validates a state transition is allowed.
+   * Throws on invalid transition.
+   */
+  private assertValidTransition(current: OrderStatus, next: OrderStatus): void {
+    const allowed = VALID_TRANSITIONS[current] ?? [];
+    if (!allowed.includes(next)) {
+      throw new Error(
+        `Transición inválida: ${current} → ${next}. Transiciones permitidas: [${allowed.join(", ") || "ninguna (estado terminal)"}]`
+      );
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Create Order
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * Create a new order with status AWAITING_PAYMENT
    */
   async create(data: CreateOrderDto) {
-    // Validate products and variants exist
     const itemsWithDetails: OrderItem[] = [];
     let subtotal = prismaDecimal(0);
 
     for (const item of data.items) {
       const product = await prisma.product.findUnique({
         where: { id: item.productId },
-        include: {
-          variants: true,
-        },
+        include: { variants: true },
       });
 
       if (!product) {
         throw new Error(`Producto ${item.productId} no encontrado`);
       }
-
       if (!product.isActive) {
         throw new Error(`Producto ${product.name} no está disponible`);
       }
 
-      // Get variant if specified
       let variant = null;
       if (item.variantId) {
         variant = product.variants.find((v: (typeof product.variants)[0]) => v.id === item.variantId);
-        if (!variant) {
-          throw new Error(`Variante ${item.variantId} no encontrada`);
-        }
-        if (!variant.isActive) {
-          throw new Error(`Variante ${variant.name} no está disponible`);
-        }
+        if (!variant) throw new Error(`Variante ${item.variantId} no encontrada`);
+        if (!variant.isActive) throw new Error(`Variante ${variant.name} no está disponible`);
         if (variant.stock !== null && variant.stock < item.quantity) {
-          throw new Error(
-            `Stock insuficiente para ${variant.name}. Disponible: ${variant.stock}`
-          );
+          throw new Error(`Stock insuficiente para ${variant.name}. Disponible: ${variant.stock}`);
         }
       } else {
-        // If no variant specified, use first active variant or base price
         if (product.variants.length > 0) {
           variant = product.variants.find((v: (typeof product.variants)[0]) => v.isActive);
-          if (!variant) {
-            throw new Error(
-              `No hay variantes disponibles para ${product.name}`
-            );
-          }
+          if (!variant) throw new Error(`No hay variantes disponibles para ${product.name}`);
         }
       }
 
-      // Calcular precio efectivo según reglas de negocio
       const unitPrice = getEffectivePrice(product, variant);
       const itemSubtotal = unitPrice.mul(item.quantity);
       subtotal = subtotal.add(itemSubtotal);
@@ -92,25 +116,25 @@ export class OrderService {
         size: variant?.size || undefined,
         quantity: item.quantity,
         unitPrice: prismaNumber(unitPrice),
-        discount: 0, // Will be calculated when discount code is applied
+        discount: 0,
         subtotal: prismaNumber(itemSubtotal),
         total: prismaNumber(itemSubtotal),
       });
     }
 
-    // Create or update Lead with customer info if provided
+    // Create or update Lead
     let leadId: string | null = data.leadId ?? null;
+    let leadEmail: string | undefined;
+    let leadName: string | undefined;
 
     if (data.customerInfo) {
       const { email, name, lastName, dni, phoneNumber } = data.customerInfo;
+      leadEmail = email;
+      leadName = name || undefined;
 
-      // Try to find existing lead by email
-      const existingLead = await prisma.lead.findFirst({
-        where: { email },
-      });
+      const existingLead = await prisma.lead.findFirst({ where: { email } });
 
       if (existingLead) {
-        // Update existing lead with new information
         const updatedLead = await prisma.lead.update({
           where: { id: existingLead.id },
           data: {
@@ -122,7 +146,6 @@ export class OrderService {
         });
         leadId = updatedLead.id;
       } else {
-        // Create new lead
         const newLead = await prisma.lead.create({
           data: {
             email,
@@ -136,14 +159,12 @@ export class OrderService {
       }
     }
 
-    // Free shipping
     const shippingCost = prismaDecimal(0);
 
-    // Create order
+    // Create order — status defaults to awaiting_payment (schema default)
     const order = await prisma.order.create({
       data: {
-        leadId: leadId,
-        status: "pending",
+        leadId,
         subtotal: prismaNumber(subtotal),
         discount: 0,
         shippingCost: prismaNumber(shippingCost),
@@ -153,16 +174,12 @@ export class OrderService {
           ? (data.shippingAddress as unknown as Prisma.InputJsonValue)
           : Prisma.JsonNull,
         shippingMethod: data.shippingMethod ?? null,
-        // Snapshot histórico: fuente de verdad histórica (mapeado a columna "items")
         itemsSnapshot: itemsWithDetails as unknown as Prisma.InputJsonValue,
-        // Items normalizados (relación) para reporting/queries
         items: {
           create: itemsWithDetails.map((i) => ({
             productId: i.productId,
             productVariantId: i.variantId ?? null,
-            name: i.variantName
-              ? `${i.productName} - ${i.variantName}`
-              : i.productName,
+            name: i.variantName ? `${i.productName} - ${i.variantName}` : i.productName,
             quantity: i.quantity,
             unitPrice: i.unitPrice,
             totalPrice: i.subtotal,
@@ -177,51 +194,50 @@ export class OrderService {
       },
     });
 
-    // Note: Stock will be updated when order status changes to "paid"
-
     // Apply discount code if provided
     let finalOrder = order;
     if (data.discountCode) {
       finalOrder = await this.applyDiscountCode(order.id, data.discountCode);
     }
 
+    // Dispatch ORDER_CREATED event
+    await eventDispatcher.dispatch(
+      createEvent<OrderCreatedPayload>(OrderEventType.ORDER_CREATED, order.id, {
+        orderId: order.id,
+        leadEmail,
+        leadName,
+        total: prismaNumber(subtotal),
+        currency: "ARS",
+      })
+    );
+
     return finalOrder;
   }
 
-  /**
-   * Apply discount code to order
-   * The discount is applied to each item individually
-   */
+  // ─────────────────────────────────────────────────────────────
+  // Apply Discount Code
+  // ─────────────────────────────────────────────────────────────
+
   async applyDiscountCode(orderId: string, code: string) {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: { items: true },
     });
 
-    if (!order) {
-      throw new Error("Orden no encontrada");
+    if (!order) throw new Error("Orden no encontrada");
+    if (order.status !== OrderStatus.awaiting_payment) {
+      throw new Error("Solo se pueden aplicar descuentos a órdenes en espera de pago");
     }
 
-    if (order.status !== "pending") {
-      throw new Error("Solo se pueden aplicar descuentos a órdenes pendientes");
-    }
-
-    // Validate discount code
     const items = order.items;
     const orderSubtotal = prismaDecimal(order.subtotal);
 
-    const validation = await this.discountCodeService.validateCode(
-      code,
-      orderSubtotal
-    );
-
+    const validation = await this.discountCodeService.validateCode(code, orderSubtotal);
     if (!validation.valid || !validation.discountCode) {
       throw new Error(validation.error || "Código de descuento inválido");
     }
 
     const discountCode = validation.discountCode;
-
-    // Apply discount to each item
     const discountValue = prismaDecimal(discountCode.discountValue);
     const updatedItemDiscounts = items.map((item: (typeof items)[0]) => {
       const itemSubtotal = prismaDecimal(item.totalPrice);
@@ -237,26 +253,19 @@ export class OrderService {
       }
 
       if (itemDiscount.gt(itemSubtotal)) itemDiscount = itemSubtotal;
-
-      return {
-        id: item.id,
-        subtotal: itemSubtotal,
-        discount: itemDiscount,
-      };
+      return { id: item.id, subtotal: itemSubtotal, discount: itemDiscount };
     });
 
-    // Calculate total discount
     const totalDiscount = updatedItemDiscounts.reduce(
-      (sum: ReturnType<typeof prismaDecimal>, item: (typeof updatedItemDiscounts)[0]) => sum.add(prismaDecimal(item.discount)),
+      (sum: ReturnType<typeof prismaDecimal>, item: (typeof updatedItemDiscounts)[0]) =>
+        sum.add(prismaDecimal(item.discount)),
       prismaDecimal(0)
     );
 
-    // Calculate new total
     const newTotal = orderSubtotal
       .sub(totalDiscount)
       .add(prismaDecimal(order.shippingCost));
 
-    // Persist item-level discount breakdown in OrderItem.metadata (itemsSnapshot remains immutable)
     await prisma.$transaction(async (tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">) => {
       for (const item of updatedItemDiscounts) {
         await tx.orderItem.update({
@@ -264,14 +273,11 @@ export class OrderService {
           data: {
             metadata: {
               discount: prismaNumber(prismaDecimal(item.discount)),
-              totalAfterDiscount: prismaNumber(
-                prismaDecimal(item.subtotal.sub(item.discount))
-              ),
+              totalAfterDiscount: prismaNumber(prismaDecimal(item.subtotal.sub(item.discount))),
             } as unknown as Prisma.InputJsonValue,
           },
         });
       }
-
       await tx.order.update({
         where: { id: orderId },
         data: {
@@ -286,19 +292,16 @@ export class OrderService {
       where: { id: orderId },
       include: { items: true },
     });
-    if (!updatedOrder) {
-      throw new Error("Orden no encontrada");
-    }
+    if (!updatedOrder) throw new Error("Orden no encontrada");
 
-    // Increment usage count
     await this.discountCodeService.incrementUsage(discountCode.id);
-
     return updatedOrder;
   }
 
-  /**
-   * Get order by ID
-   */
+  // ─────────────────────────────────────────────────────────────
+  // Get By ID
+  // ─────────────────────────────────────────────────────────────
+
   async getById(id: string) {
     return prisma.order.findUnique({
       where: { id },
@@ -306,41 +309,27 @@ export class OrderService {
         lead: true,
         discountCode: {
           include: {
-            influencer: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            influencer: { select: { id: true, name: true } },
           },
         },
         payments: true,
         commission: true,
+        shipment: true,
+        eventLogs: { orderBy: { createdAt: "asc" } },
         items: {
           include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                images: true,
-              },
-            },
-            productVariant: {
-              select: {
-                id: true,
-                name: true,
-                size: true,
-              },
-            },
+            product: { select: { id: true, name: true, images: true } },
+            productVariant: { select: { id: true, name: true, size: true } },
           },
         },
       },
     });
   }
 
-  /**
-   * Get all orders with pagination and filters (for admin)
-   */
+  // ─────────────────────────────────────────────────────────────
+  // Get All (Admin)
+  // ─────────────────────────────────────────────────────────────
+
   async getAll(options?: {
     page?: number;
     limit?: number;
@@ -370,62 +359,27 @@ export class OrderService {
         where,
         include: {
           lead: {
-            select: {
-              id: true,
-              email: true,
-              name: true,
-              dogSize: true,
-              createdAt: true,
-            },
+            select: { id: true, email: true, name: true, dogSize: true, createdAt: true },
           },
           discountCode: {
-            select: {
-              id: true,
-              code: true,
-              discountType: true,
-              discountValue: true,
-            },
+            select: { id: true, code: true, discountType: true, discountValue: true },
           },
           payments: {
-            select: {
-              id: true,
-              status: true,
-              amount: true,
-              currency: true,
-              paymentMethod: true,
-              createdAt: true,
-            },
-            orderBy: {
-              createdAt: "desc",
-            },
+            select: { id: true, status: true, amount: true, currency: true, paymentMethod: true, createdAt: true },
+            orderBy: { createdAt: "desc" },
+          },
+          shipment: {
+            select: { id: true, status: true, trackingNumber: true, createdAt: true },
           },
           items: {
             include: {
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-              productVariant: {
-                select: {
-                  id: true,
-                  name: true,
-                  size: true,
-                },
-              },
+              product: { select: { id: true, name: true } },
+              productVariant: { select: { id: true, name: true, size: true } },
             },
           },
-          _count: {
-            select: {
-              items: true,
-              payments: true,
-            },
-          },
+          _count: { select: { items: true, payments: true } },
         },
-        orderBy: {
-          createdAt: "desc",
-        },
+        orderBy: { createdAt: "desc" },
         skip,
         take: limit,
       }),
@@ -434,97 +388,134 @@ export class OrderService {
 
     return {
       orders,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // Update Status — State Machine + Event Dispatch
+  // ─────────────────────────────────────────────────────────────
+
   /**
-   * Update order status
+   * Transition order to a new status.
+   * Validates the transition, persists changes, logs the event,
+   * and dispatches domain events (email side-effects handled by subscribers).
    */
-  async updateStatus(id: string, status: OrderStatus) {
+  async updateStatus(
+    id: string,
+    status: OrderStatus,
+    meta?: {
+      paymentId?: string;
+      mercadoPagoPaymentId?: string;
+      reason?: string;
+    }
+  ) {
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { items: true },
+      include: { items: true, lead: true },
     });
 
-    if (!order) {
-      throw new Error("Orden no encontrada");
-    }
+    if (!order) throw new Error("Orden no encontrada");
 
+    const currentStatus = order.status;
+
+    // ── Guard: validate transition ────────────────────────────
+    this.assertValidTransition(currentStatus, status);
+
+    // ── Persist new status ────────────────────────────────────
     const updatedOrder = await prisma.order.update({
       where: { id },
       data: { status },
-      include: {
-        lead: true,
+      include: { lead: true },
+    });
+
+    // ── Log event ─────────────────────────────────────────────
+    await prisma.orderEventLog.create({
+      data: {
+        orderId: id,
+        event: status.toUpperCase(),
+        fromStatus: currentStatus,
+        toStatus: status,
+        payload: meta ? (meta as unknown as Prisma.InputJsonValue) : undefined,
       },
     });
 
-    // If order is paid, update stock and create commission
+    const leadEmail = updatedOrder.lead?.email;
+    const leadName = updatedOrder.lead?.name || "Cliente";
+
+    // ── Side-effects when order is PAID ───────────────────────
     if (status === OrderStatus.paid) {
-      // Update stock for each item
+      // Update stock
       for (const item of order.items) {
         if (item.productVariantId) {
           await prisma.productVariant.update({
             where: { id: item.productVariantId },
-            data: {
-              stock: {
-                decrement: item.quantity,
-              },
-            },
+            data: { stock: { decrement: item.quantity } },
           });
         }
       }
-
-      // Create commission if order has discount code
+      // Create commission if discount code was used
       if (order.discountCodeId) {
         await this.commissionService.createFromOrder(order.id);
       }
+
+      // Dispatch PAYMENT_APPROVED event (email handled by subscriber)
+      await eventDispatcher.dispatch(
+        createEvent<PaymentApprovedPayload>(
+          OrderEventType.PAYMENT_APPROVED,
+          id,
+          {
+            orderId: id,
+            paymentId: meta?.paymentId ?? "",
+            mercadoPagoPaymentId: meta?.mercadoPagoPaymentId ?? "",
+            amount: prismaNumber(prismaDecimal(updatedOrder.total)),
+            currency: updatedOrder.currency,
+            leadEmail,
+            leadName,
+          }
+        )
+      );
     }
 
-    // Send email notification when order is paid or cancelled
-    console.log("🚀 ~ OrderService ~ updateStatus ~ updatedOrder:", updatedOrder)
-    if (updatedOrder.lead) {
-      try {
-        if (status === OrderStatus.paid) {
-          await emailService.sendOrderConfirmation(
-            updatedOrder.lead.email,
-            updatedOrder.lead.name || "Cliente",
-            updatedOrder.id,
-            prismaNumber(prismaDecimal(updatedOrder.total)),
-            updatedOrder.currency
-          );
-        } else if (status === OrderStatus.cancelled) {
-          await emailService.sendOrderPaymentProblem(
-            updatedOrder.lead.email,
-            updatedOrder.lead.name || "Cliente",
-            updatedOrder.id
-          );
-        }
-      } catch (error) {
-        console.error("Error sending order status email:", error);
-        // Don't fail status update if email fails
-      }
+    // ── Side-effects when order is CANCELLED ─────────────────
+    if (status === OrderStatus.cancelled) {
+      await eventDispatcher.dispatch(
+        createEvent<PaymentRejectedPayload>(
+          OrderEventType.PAYMENT_REJECTED,
+          id,
+          {
+            orderId: id,
+            paymentId: meta?.paymentId ?? "",
+            mercadoPagoPaymentId: meta?.mercadoPagoPaymentId ?? "",
+            reason: meta?.reason,
+            leadEmail,
+            leadName,
+          }
+        )
+      );
+    }
+
+    // ── Side-effects when order is REFUNDED ──────────────────
+    if (status === OrderStatus.refunded) {
+      await eventDispatcher.dispatch(
+        createEvent(OrderEventType.ORDER_REFUNDED, id, {
+          orderId: id,
+          leadEmail,
+          leadName,
+        })
+      );
     }
 
     return updatedOrder;
   }
 
-  /**
-   * Calculate order totals
-   */
-  async calculateTotals(orderId: string) {
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-    });
+  // ─────────────────────────────────────────────────────────────
+  // Calculate Totals
+  // ─────────────────────────────────────────────────────────────
 
-    if (!order) {
-      throw new Error("Orden no encontrada");
-    }
+  async calculateTotals(orderId: string) {
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new Error("Orden no encontrada");
 
     return {
       subtotal: prismaNumber(order.subtotal),
@@ -534,9 +525,13 @@ export class OrderService {
     };
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // Calculate Shipping Cost (MiCorreo quote)
+  // ─────────────────────────────────────────────────────────────
+
   /**
-   * Calculate and register real shipping cost from MiCorreo
-   * Customer always pays $0, but we track the real cost for analytics
+   * Calculate and register real shipping cost from MiCorreo.
+   * Customer always pays $0 — we track real cost for analytics.
    */
   async calculateShippingCost(orderId: string) {
     const order = await prisma.order.findUnique({
@@ -544,9 +539,7 @@ export class OrderService {
       include: { lead: true },
     });
 
-    if (!order) {
-      throw new Error("Orden no encontrada");
-    }
+    if (!order) throw new Error("Orden no encontrada");
 
     if (!order.shippingAddress) {
       console.warn(`⚠️ [Shipping] Orden ${orderId} no tiene dirección de envío`);
@@ -556,25 +549,21 @@ export class OrderService {
     const shippingAddress = order.shippingAddress as any;
 
     try {
-      // Get or create MiCorreo customer
       const miCorreoCustomer = await prisma.miCorreoCustomer.findFirst({
-        where: { documentId: '33722435' },
+        where: { documentId: "20337224351" },
       });
 
-      // If no customer exists, we can't get a shipping quote
       if (!miCorreoCustomer) {
         console.warn(
-          `⚠️ [Shipping] No se encontró cliente MiCorreo (documentId: 33722435) para orden ${orderId}. ` +
-          `Es necesario registrar el cliente en la tabla MiCorreoCustomer.`
+          `⚠️ [Shipping] No se encontró cliente MiCorreo para orden ${orderId}.`
         );
         return null;
       }
 
-      // Get shipping quote from MiCorreo with standard package dimensions
       const quote = await this.miCorreoService.getRates({
         customerId: miCorreoCustomer.customerId,
         postalCodeOrigin: shippingConfig.originPostalCode,
-        postalCodeDestination: shippingAddress.zipCode,   // ← el campo real del objeto Address
+        postalCodeDestination: shippingAddress.zipCode,
         dimensions: shippingConfig.standardPackage,
       });
 
@@ -583,15 +572,15 @@ export class OrderService {
         return null;
       }
 
-      // Select the most economical rate
-      const selectedRate = quote.rates.find(el => el.productType === "Correo Argentino Clasico" && el.deliveredType === "D"
+      const selectedRate = quote.rates.find(
+        (el) => el.productName === "Correo Argentino Clasico" && el.deliveredType === "D"
       );
+
       if (!selectedRate) {
         console.warn(`⚠️ [Shipping] No se encontró tarifa específica para orden ${orderId}`);
         return null;
       }
 
-      // Update order with shipping information
       await prisma.order.update({
         where: { id: orderId },
         data: {
@@ -600,26 +589,21 @@ export class OrderService {
           miCorreoCustomerId: miCorreoCustomer.customerId,
           miCorreoDeliveryType: selectedRate.deliveredType,
           miCorreoProductType: selectedRate.productType,
-          shippingSubsidyAmount: selectedRate.price, // Full subsidy
-          // shippingCost remains 0 for customer
+          shippingSubsidyAmount: selectedRate.price,
         },
       });
 
-      console.log(`✅ [Shipping] Costo calculado para orden ${orderId}: $${selectedRate.price} (subsidiado)`);
+      console.log(`✅ [Shipping] Costo calculado para orden ${orderId}: $${selectedRate.price}`);
 
       return {
         realCost: selectedRate.price,
         customerCost: 0,
         subsidyAmount: selectedRate.price,
-        deliveryTime: {
-          min: selectedRate.deliveryTimeMin,
-          max: selectedRate.deliveryTimeMax,
-        },
+        deliveryTime: { min: selectedRate.deliveryTimeMin, max: selectedRate.deliveryTimeMax },
         productName: selectedRate.productName,
       };
     } catch (error) {
       console.error(`❌ [Shipping] Error calculando costo para orden ${orderId}:`, error);
-      // Don't fail the order if shipping calculation fails
       return null;
     }
   }

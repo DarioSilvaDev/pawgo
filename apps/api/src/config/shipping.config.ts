@@ -11,7 +11,7 @@ export const shippingConfig = {
     },
 
     // Código postal de origen (almacén/depósito)
-    originPostalCode: "1414", // CABA - Cambiar según ubicación del almacén
+    originPostalCode: "2900", // CABA - Cambiar según ubicación del almacén
 
     // Estrategia de envío
     freeShipping: true, // Envío gratis para el cliente

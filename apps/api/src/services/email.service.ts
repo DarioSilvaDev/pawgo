@@ -96,6 +96,8 @@ function getEmailHeader(): string {
   `;
 }
 
+import { prisma } from "../config/prisma.client.js";
+
 export interface EmailOptions {
   to: string;
   subject: string;
@@ -905,6 +907,213 @@ export class EmailService {
         })
       )
     );
+  }
+  /**
+   * ──────────────────────────────────────────────────────────────
+   * IDEMPOTENT SENDING — uses EmailLog table as deduplication
+   * ──────────────────────────────────────────────────────────────
+   * Pattern: check EmailLog → skip if exists → send → insert log
+   */
+  private async sendIdempotent(
+    idempotencyKey: string,
+    event: string,
+    recipient: string,
+    sendFn: () => Promise<void>
+  ): Promise<void> {
+    const existing = await prisma.emailLog.findUnique({
+      where: { idempotencyKey },
+    });
+
+    if (existing) {
+      console.log(`[EmailService] Idempotency: ${idempotencyKey} already sent — skipping`);
+      return;
+    }
+
+    await sendFn();
+
+    // Persist after successful send
+    await prisma.emailLog.create({
+      data: { idempotencyKey, event, recipient },
+    }).catch((err: unknown) => {
+      // Log but don't fail — email was already sent
+      console.warn(`[EmailService] Failed to persist EmailLog for ${idempotencyKey}:`, err);
+    });
+  }
+
+  /**
+   * Idempotent order confirmation (PAYMENT_APPROVED)
+   */
+  async sendOrderConfirmationIdempotent(params: {
+    idempotencyKey: string;
+    email: string;
+    name: string;
+    orderId: string;
+    total: number;
+    currency: string;
+  }): Promise<void> {
+    await this.sendIdempotent(
+      params.idempotencyKey,
+      "PAYMENT_APPROVED",
+      params.email,
+      () => this.sendOrderConfirmation(params.email, params.name, params.orderId, params.total, params.currency)
+    );
+  }
+
+  /**
+   * Idempotent payment problem email (PAYMENT_REJECTED)
+   */
+  async sendOrderPaymentProblemIdempotent(params: {
+    idempotencyKey: string;
+    email: string;
+    name: string;
+    orderId: string;
+    reason?: string;
+  }): Promise<void> {
+    await this.sendIdempotent(
+      params.idempotencyKey,
+      "PAYMENT_REJECTED",
+      params.email,
+      () => this.sendOrderPaymentProblem(params.email, params.name, params.orderId, params.reason)
+    );
+  }
+
+  /**
+   * Idempotent shipment created email (SHIPMENT_CREATED)
+   */
+  async sendShipmentCreatedIdempotent(params: {
+    idempotencyKey: string;
+    email: string;
+    name: string;
+    orderId: string;
+    trackingNumber: string;
+  }): Promise<void> {
+    await this.sendIdempotent(
+      params.idempotencyKey,
+      "SHIPMENT_CREATED",
+      params.email,
+      () => this.sendShipmentCreated(params.email, params.name, params.orderId, params.trackingNumber)
+    );
+  }
+
+  /**
+   * Idempotent shipment delivered email (SHIPMENT_DELIVERED)
+   */
+  async sendShipmentDeliveredIdempotent(params: {
+    idempotencyKey: string;
+    email: string;
+    name: string;
+    orderId: string;
+    trackingNumber: string;
+  }): Promise<void> {
+    await this.sendIdempotent(
+      params.idempotencyKey,
+      "SHIPMENT_DELIVERED",
+      params.email,
+      () => this.sendShipmentDelivered(params.email, params.name, params.orderId, params.trackingNumber)
+    );
+  }
+
+  /**
+   * Shipment created / label generated notification
+   */
+  async sendShipmentCreated(
+    email: string,
+    name: string,
+    orderId: string,
+    trackingNumber: string
+  ): Promise<void> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+            .info-box { background-color: #e7f3ff; border-left: 4px solid #00CED1; padding: 16px; margin: 20px 0; border-radius: 4px; }
+            .tracking-code { font-size: 18px; font-weight: bold; color: #00CED1; letter-spacing: 1px; }
+            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            ${getEmailHeader()}
+            <div class="content">
+              <h2>📦 Tu pedido está en camino</h2>
+              <p>Hola ${name},</p>
+              <p>Tu pedido #<strong>${orderId.slice(0, 10)}</strong> fue despachado a través de <strong>Correo Argentino</strong>.</p>
+              <div class="info-box">
+                <p style="margin: 0 0 8px 0;"><strong>Número de seguimiento:</strong></p>
+                <p class="tracking-code">${trackingNumber}</p>
+              </div>
+              <p>Podés realizar el seguimiento de tu envío en <a href="https://www.correoargentino.com.ar/formularios/me" style="color:#00CED1;">el sitio de Correo Argentino</a> usando ese número.</p>
+              <p>¡Gracias por confiar en PawGo! 🐾</p>
+            </div>
+            <div class="footer">
+              <p>© 2026 PawGo. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendViaResend({
+      to: email,
+      subject: `Tu pedido fue despachado 📦 — PawGo`,
+      html,
+    });
+  }
+
+  /**
+   * Shipment delivered notification
+   */
+  async sendShipmentDelivered(
+    email: string,
+    name: string,
+    orderId: string,
+    trackingNumber: string
+  ): Promise<void> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+            .success-box { background-color: #d4edda; border-left: 4px solid #28a745; padding: 16px; margin: 20px 0; border-radius: 4px; }
+            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            ${getEmailHeader()}
+            <div class="content">
+              <h2>✅ Tu pedido fue entregado</h2>
+              <p>Hola ${name},</p>
+              <div class="success-box">
+                <p style="margin: 0;"><strong>¡Tu pedido fue entregado exitosamente!</strong></p>
+              </div>
+              <p>Tu pedido #<strong>${orderId.slice(0, 10)}</strong> (seguimiento: ${trackingNumber}) fue entregado.</p>
+              <p>Esperamos que disfrutes tu compra junto a tu mejor amigo 🐕</p>
+              <p>Si tenés alguna consulta, respondé a este email y te ayudamos.</p>
+              <p><strong>¡Gracias por comprar en PawGo!</strong> 💙</p>
+            </div>
+            <div class="footer">
+              <p>© 2026 PawGo. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendViaResend({
+      to: email,
+      subject: `¡Tu pedido fue entregado! ✅ — PawGo`,
+      html,
+    });
   }
 }
 

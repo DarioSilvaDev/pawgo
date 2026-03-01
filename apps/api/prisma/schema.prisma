@@ -18,19 +18,31 @@ enum AuthRole {
 }
 
 enum OrderStatus {
-  pending   @map("pending")
-  paid      @map("paid")
-  shipped   @map("shipped")
-  delivered @map("delivered")
-  cancelled @map("cancelled")
+  awaiting_payment @map("awaiting_payment")
+  paid             @map("paid")
+  ready_to_ship    @map("ready_to_ship")
+  shipped          @map("shipped")
+  delivered        @map("delivered")
+  cancelled        @map("cancelled")
+  refunded         @map("refunded")
 }
 
 enum PaymentStatus {
-  pending   @map("pending")
-  approved  @map("approved")
-  rejected  @map("rejected")
-  refunded  @map("refunded")
-  cancelled @map("cancelled")
+  pending    @map("pending")
+  approved   @map("approved")
+  rejected   @map("rejected")
+  refunded   @map("refunded")
+  cancelled  @map("cancelled")
+  chargeback @map("chargeback")
+}
+
+enum ShipmentStatus {
+  not_created   @map("not_created")
+  label_created @map("label_created")
+  in_transit    @map("in_transit")
+  delivered     @map("delivered")
+  returned      @map("returned")
+  lost          @map("lost")
 }
 
 enum CommissionStatus {
@@ -347,7 +359,7 @@ model Order {
   id              String      @id @default(cuid())
   leadId          String?
   discountCodeId  String? // Código de descuento usado
-  status          OrderStatus @default(pending)
+  status          OrderStatus @default(awaiting_payment)
   subtotal        Decimal     @db.Decimal(10, 2) // Antes de descuento
   discount        Decimal     @default(0) @db.Decimal(10, 2) // Descuento aplicado
   shippingCost    Decimal     @default(0) @db.Decimal(10, 2) // Costo de envío (siempre $0 para cliente)
@@ -374,12 +386,66 @@ model Order {
   payments     Payment[]
   items        OrderItem[]
   commission   Commission?
+  shipment     Shipment?
+  eventLogs    OrderEventLog[]
 
   @@index([discountCodeId])
   @@index([leadId])
   @@index([status])
   @@index([createdAt])
   @@map("orders")
+}
+
+// Envíos (Correo Argentino)
+model Shipment {
+  id             String         @id @default(cuid())
+  orderId        String         @unique
+  status         ShipmentStatus @default(not_created)
+  trackingNumber String?
+  labelUrl       String?
+  carrier        String         @default("correo_argentino")
+  extOrderId     String?        // ID externo enviado a MiCorreo (extOrderId)
+  rawPayload     Json?          // Payload completo de respuesta de MiCorreo
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@index([trackingNumber])
+  @@map("shipments")
+}
+
+// Log de eventos de órdenes (auditoría interna)
+model OrderEventLog {
+  id        String   @id @default(cuid())
+  orderId   String
+  event     String   // e.g. "PAYMENT_APPROVED"
+  fromStatus String? // Estado anterior
+  toStatus   String? // Estado nuevo
+  payload   Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([event])
+  @@index([createdAt])
+  @@map("order_event_logs")
+}
+
+// Log de emails enviados (idempotencia)
+model EmailLog {
+  id             String   @id @default(cuid())
+  idempotencyKey String   @unique // e.g. "PAYMENT_APPROVED:orderId"
+  event          String
+  recipient      String
+  sentAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([idempotencyKey])
+  @@index([event])
+  @@map("email_logs")
 }
 
 // E-commerce - Items normalizados de la orden (sin romper snapshot histórico)

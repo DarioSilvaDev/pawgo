@@ -10,6 +10,10 @@ import {
     type ValidateUserResponse,
     type GetRatesRequest,
     type GetRatesResponse,
+    type ImportShipmentRequest,
+    type ImportShipmentResponse,
+    type GetTrackingRequest,
+    type GetTrackingResponse,
 } from "./micorreo.types.js";
 
 /**
@@ -87,8 +91,8 @@ export class MiCorreoService {
                     email: data.email,
                     firstName: "",
                     lastName: "",
-                    documentType: "DNI",
-                    documentId: "",
+                    documentType: "CUIL",
+                    documentId: '20337224351',
                 },
             });
             console.log(`💾 [MiCorreo] Cliente upserted en BD: ${response.customerId}`);
@@ -334,5 +338,62 @@ export class MiCorreoService {
         return prisma.miCorreoCustomer.findUnique({
             where: { customerId },
         });
+    }
+
+    // ============================================
+    // 4. IMPORT SHIPMENT (/shipping/import)
+    // ============================================
+
+    /**
+     * Importa un envío a MiCorreo (crea la etiqueta de despacho).
+     * Solo disponible para envíos a domicilio (deliveryType = "D").
+     */
+    async importShipment(data: ImportShipmentRequest): Promise<ImportShipmentResponse> {
+        const response = await this.makeAuthenticatedRequest<ImportShipmentResponse>("/shipping/import", {
+            method: "POST",
+            body: JSON.stringify(data),
+        });
+
+        console.log(`✅ [MiCorreo] Envío importado: extOrderId=${data.extOrderId}, createdAt=${response.createdAt}`);
+        return response;
+    }
+
+    // ============================================
+    // 5. GET TRACKING (/shipping/tracking)
+    // ============================================
+
+    /**
+     * Obtiene el seguimiento de un envío importado a MiCorreo.
+     * El shippingId corresponde al trackingNumber o extOrderId del envío.
+     *
+     * MiCorreo puede devolver:
+     * - Array con evento(s): envío encontrado con historial
+     * - Array vacío (events: []): envío encontrado sin movimientos aún
+     * - Objeto con "error": envío no encontrado
+     */
+    async getTracking(data: GetTrackingRequest): Promise<GetTrackingResponse> {
+        try {
+            // MiCorreo tracking returns either an array or an error object
+            const response = await this.makeAuthenticatedRequest<GetTrackingResponse | { error: string; code: string; date: string }>(
+                "/shipping/tracking",
+                {
+                    method: "GET",
+                    body: JSON.stringify(data),
+                }
+            );
+
+            // Handle MiCorreo error response (200 OK with error body)
+            if (!Array.isArray(response) && response.error) {
+                console.warn(`⚠️ [MiCorreo] Tracking no encontrado para ${data.shippingId}: ${response.error}`);
+                return [];
+            }
+
+            const results = response as GetTrackingResponse;
+            console.log(`✅ [MiCorreo] Tracking para ${data.shippingId}: ${results.length} resultado(s)`);
+            return results;
+        } catch (error) {
+            console.error(`❌ [MiCorreo] Error obteniendo tracking para ${data.shippingId}:`, error);
+            throw error;
+        }
     }
 }

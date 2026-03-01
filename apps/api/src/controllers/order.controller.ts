@@ -29,6 +29,15 @@ function isAddress(value: unknown): value is Address {
 // Validation schemas
 const createOrderSchema = z.object({
   leadId: z.string().optional(),
+  customerInfo: z
+    .object({
+      name: z.string().min(1, "Nombre es requerido"),
+      lastName: z.string().optional().default(""),
+      dni: z.string().optional().default(""),
+      phoneNumber: z.string().optional().default(""),
+      email: z.string().email("Email inválido"),
+    })
+    .optional(),
   items: z
     .array(
       z.object({
@@ -171,9 +180,9 @@ export function createOrderController(
           return;
         }
 
-        if (order.status !== "pending") {
+        if (order.status !== OrderStatus.awaiting_payment) {
           reply.status(400).send({
-            error: "Solo se pueden crear pagos para órdenes pendientes",
+            error: "Solo se pueden crear pagos para órdenes en espera de pago",
           });
           return;
         }
