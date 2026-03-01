@@ -423,7 +423,8 @@ export default function CheckoutPage() {
             )}
 
             {/* Navigation Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 mt-6 md:mt-8">
+            {/* Navigation Buttons - Hidden on Mobile sticky footer if in Step 1 */}
+            <div className={`flex flex-col sm:flex-row gap-4 mt-6 md:mt-8 ${currentStep === 1 ? 'hidden sm:flex' : 'flex'}`}>
               {currentStep > 1 && (
                 <button
                   onClick={handleBack}
@@ -498,6 +499,34 @@ export default function CheckoutPage() {
           </div>
         </div>
       </div>
+
+      {/* Sticky Mobile Footer - Only for Step 1 for now to match ML experience */}
+      {currentStep === 1 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] sm:hidden z-50 animate-in slide-in-from-bottom">
+          <div className="flex items-center justify-between gap-4 max-w-lg mx-auto">
+            <div className="flex flex-col">
+              <span className="text-xs text-text-dark-gray">Total del producto</span>
+              <span className="text-lg font-bold text-text-black">
+                {new Intl.NumberFormat("es-AR", {
+                  style: "currency",
+                  currency: "ARS",
+                  minimumFractionDigits: 0,
+                }).format(orderData.total)}
+              </span>
+            </div>
+            <button
+              onClick={handleNext}
+              disabled={!canProceedToStep2}
+              className="btn-primary flex-1 py-3 px-6 h-auto text-base font-bold shadow-lg shadow-primary-turquoise/20 disabled:grayscale disabled:opacity-50"
+            >
+              Continuar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Add padding to bottom when sticky is present */}
+      {currentStep === 1 && <div className="h-24 sm:hidden" />}
     </div>
   );
 }
