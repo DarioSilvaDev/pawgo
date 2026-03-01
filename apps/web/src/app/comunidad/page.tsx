@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 
@@ -118,7 +118,8 @@ function ReviewCard({ review, onClick }: { review: Review; onClick: () => void }
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-export default function ComunidadPage() {
+// ─── Main Page Content ────────────────────────────────────────────────────────
+function ComunidadPageContent() {
     const searchParams = useSearchParams();
     const [step, setStep] = useState<Step>("gallery");
     const [reviews, setReviews] = useState<Review[]>([]);
@@ -718,5 +719,17 @@ export default function ComunidadPage() {
             </section>
             <Footer />
         </div>
+    );
+}
+
+export default function ComunidadPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-teal-500"></div>
+            </div>
+        }>
+            <ComunidadPageContent />
+        </Suspense>
     );
 }
