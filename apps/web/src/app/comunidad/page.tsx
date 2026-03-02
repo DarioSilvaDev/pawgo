@@ -73,46 +73,49 @@ function ReviewCard({ review, onClick }: { review: Review; onClick: () => void }
     return (
         <div
             onClick={onClick}
-            className="bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 group cursor-pointer hover:-translate-y-1"
+            className="group relative bg-white rounded-3xl shadow-sm overflow-hidden hover:shadow-xl transition-all duration-500 cursor-pointer hover:-translate-y-1.5 aspect-[3/4]"
         >
-            {review.imageUrl && (
-                <div className="relative h-52 w-full overflow-hidden">
-                    <Image
-                        src={review.imageUrl}
-                        alt={`Foto de ${review.petName}`}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-500"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                    />
-                </div>
+            {review.imageUrl ? (
+                <Image
+                    src={review.imageUrl}
+                    alt={`Foto de ${review.petName}`}
+                    fill
+                    className="object-cover group-hover:scale-110 transition-transform duration-700"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                />
+            ) : (
+                <div className="w-full h-full flex items-center justify-center bg-teal-50 text-4xl">🐾</div>
             )}
-            <div className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center text-white font-bold text-sm">
-                            {review.petName.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                            <p className="font-semibold text-gray-800 text-sm leading-none">{review.petName}</p>
-                            {review.purchaseVerified && (
-                                <span className="text-xs text-emerald-600 font-medium flex items-center gap-1 mt-0.5">
-                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                    </svg>
-                                    Compra verificada
-                                </span>
-                            )}
-                        </div>
+
+            {/* Overlay Gradient */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
+
+            {/* Thumbnail Content */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 text-white translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                <div className="flex items-center gap-2 mb-1.5">
+                    <div className="w-7 h-7 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center font-bold text-xs">
+                        {review.petName.charAt(0).toUpperCase()}
                     </div>
+                    <p className="font-bold text-sm truncate">{review.petName}</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <StarRating value={review.rating} readonly size="sm" />
                     {review.isFeatured && (
-                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-medium">
-                            ⭐ Destacada
+                        <span className="text-[10px] bg-amber-400 text-amber-950 px-1.5 py-0.5 rounded-full font-bold">
+                            ⭐
                         </span>
                     )}
                 </div>
-                <StarRating value={review.rating} readonly size="sm" />
-                <p className="mt-3 text-gray-600 text-sm leading-relaxed line-clamp-3">{review.comment}</p>
             </div>
+
+            {/* Verification Badge (Top Right) */}
+            {review.purchaseVerified && (
+                <div className="absolute top-3 right-3 bg-emerald-500/90 backdrop-blur-sm text-white p-1 rounded-full shadow-lg">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                </div>
+            )}
         </div>
     );
 }
@@ -614,11 +617,9 @@ function ComunidadPageContent() {
                         </button>
                     </div>
                 ) : (
-                    <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                         {reviews.map((review) => (
-                            <div key={review.id} className="break-inside-avoid">
-                                <ReviewCard review={review} onClick={() => setSelectedReview(review)} />
-                            </div>
+                            <ReviewCard key={review.id} review={review} onClick={() => setSelectedReview(review)} />
                         ))}
                     </div>
                 )}
@@ -626,56 +627,55 @@ function ComunidadPageContent() {
                 {/* ── REVIEW DETAIL MODAL ─────────────────────────────────────── */}
                 {selectedReview && (
                     <div
-                        className="fixed inset-0 bg-black/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 transition-opacity duration-300"
+                        className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[150] flex items-center justify-center md:p-6 transition-all duration-500 overflow-hidden"
                         onClick={(e) => {
                             if (e.target === e.currentTarget) setSelectedReview(null);
                         }}
                     >
-                        <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden max-w-4xl w-full max-h-[90vh] flex flex-col md:flex-row items-stretch relative animate-in fade-in zoom-in duration-300">
+                        <div className="bg-white md:rounded-[2.5rem] shadow-2xl overflow-hidden w-full h-full md:max-w-7xl md:h-[85vh] flex flex-col md:flex-row items-stretch relative animate-in fade-in zoom-in duration-500 slide-in-from-bottom-10">
                             {/* Close button */}
                             <button
                                 onClick={() => setSelectedReview(null)}
-                                className="absolute top-4 right-4 z-[120] bg-black/20 hover:bg-black/40 text-white p-2 rounded-full transition-colors backdrop-blur-sm"
+                                className="absolute top-6 right-6 z-[160] bg-white/20 hover:bg-white/40 text-white p-2.5 rounded-full transition-all backdrop-blur-md border border-white/30 active:scale-95"
                             >
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
 
-                            {/* Left: Image (Large) */}
-                            <div className="relative w-full h-[350px] sm:h-[450px] md:h-auto md:w-1/2 bg-gray-50 flex-shrink-0">
+                            {/* Left: Image (Large - 70% Desktop) */}
+                            <div className="relative w-full h-[60vh] md:h-auto md:w-[70%] bg-zinc-950 flex-shrink-0 group">
                                 {selectedReview.imageUrl ? (
                                     <Image
                                         src={selectedReview.imageUrl}
                                         alt={`Foto de ${selectedReview.petName}`}
                                         fill
-                                        className="object-cover"
-                                        sizes="(max-width: 768px) 100vw, 50vw"
+                                        className="object-contain md:object-cover"
+                                        sizes="(max-width: 768px) 100vw, 70vw"
                                         priority
                                     />
                                 ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-6xl">
+                                    <div className="w-full h-full flex items-center justify-center text-8xl">
                                         🐾
                                     </div>
                                 )}
+                                {/* Mobile Close Button Overlay */}
+                                <div className="absolute inset-0 md:hidden pointer-events-none bg-gradient-to-t from-black/40 via-transparent to-transparent" />
                             </div>
 
-                            {/* Right: Content */}
-                            <div className="w-full md:w-1/2 p-8 md:p-10 flex flex-col overflow-y-auto">
-                                <div className="flex items-center gap-4 mb-6">
-                                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center text-white font-bold text-2xl">
+                            {/* Right: Content (30% Desktop) */}
+                            <div className="w-full md:w-[30%] bg-white p-6 sm:p-10 flex flex-col md:overflow-y-auto border-l border-gray-100">
+                                <div className="flex items-center gap-5 mb-8">
+                                    <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center text-white font-black text-3xl shadow-lg ring-4 ring-cyan-50">
                                         {selectedReview.petName.charAt(0).toUpperCase()}
                                     </div>
-                                    <div>
-                                        <h3 className="text-2xl font-bold text-gray-800">{selectedReview.petName}</h3>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <StarRating value={selectedReview.rating} readonly size="sm" />
+                                    <div className="flex-1">
+                                        <h3 className="text-3xl font-black text-gray-900 leading-tight mb-1">{selectedReview.petName}</h3>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <StarRating value={selectedReview.rating} readonly size="md" />
                                             {selectedReview.purchaseVerified && (
-                                                <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                    </svg>
-                                                    Compra verificada
+                                                <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-bold bg-emerald-100 px-2 py-1 rounded-md flex items-center gap-1">
+                                                    Verificada
                                                 </span>
                                             )}
                                         </div>
@@ -683,20 +683,26 @@ function ComunidadPageContent() {
                                 </div>
 
                                 <div className="flex-1">
-                                    <div className="relative">
-                                        <span className="absolute -top-4 -left-2 text-6xl text-teal-100 font-serif leading-none select-none">“</span>
-                                        <p className="text-gray-700 text-lg italic leading-relaxed relative z-10 first-letter:text-3xl first-letter:font-bold first-letter:text-teal-500 first-letter:mr-2">
+                                    <div className="relative pt-6">
+                                        <svg className="absolute top-0 -left-2 w-10 h-10 text-teal-100 opacity-60" fill="currentColor" viewBox="0 0 32 32">
+                                            <path d="M10 8c-4.418 0-8 3.582-8 8s3.582 8 8 8c1.11 0 2.162-.224 3.125-.625C13.882 25.12 15.65 26 18 26c2.35 0 4.118-.88 4.875-2.625.963.401 2.015.625 3.125.625 4.418 0 8-3.582 8-8s-3.582-8-8-8c-1.11 0-2.162.224-3.125.625-.757-1.745-2.525-2.625-4.875-2.625-2.35 0-4.118.88-4.875 2.625A7.957 7.957 0 0010 8z" />
+                                            <path d="M11 20.5c0 1.933-1.567 3.5-3.5 3.5S4 22.433 4 20.5 5.567 17 7.5 17s3.5 1.567 3.5 3.5zm21-4.5h-5.2s-1-2.5-3.3-2.5-3.3 2.5-3.3 2.5h-2.4s-1-2.5-3.3-2.5-3.3 2.5-3.3 2.5H8s-1-2.5-3.3-2.5-3.3 2.5-3.3 2.5H1v1s.5.5 1.5.5 1.5-.5 1.5-.5V21c0 1.1.9 2 2 2h24c1.1 0 2-.9 2-2v-4.5s.5.5 1.5.5 1.5-.5 1.5-.5v-1z" />
+                                        </svg>
+                                        <p className="text-gray-700 text-lg leading-relaxed font-medium">
                                             {selectedReview.comment}
                                         </p>
-                                        <span className="block text-right text-6xl text-teal-100 font-serif leading-none select-none mt-[-1rem]">”</span>
                                     </div>
                                 </div>
 
-                                <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between text-gray-400 text-sm">
-                                    <span>Compartido el {new Date(selectedReview.createdAt).toLocaleDateString()}</span>
-                                    <span className="flex items-center gap-1">
-                                        Made with PawGo 🐾
-                                    </span>
+                                <div className="mt-10 pt-8 border-t border-gray-100 flex items-center justify-between text-gray-400 text-xs font-semibold uppercase tracking-widest">
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-gray-300">Publicado</span>
+                                        <span className="text-gray-600">{new Date(selectedReview.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-teal-500">
+                                        <span>PawGo Fam</span>
+                                        <span className="text-xl">🐾</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
