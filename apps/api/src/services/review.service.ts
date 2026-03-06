@@ -62,38 +62,49 @@ export class ReviewService {
     async validateEmail(email: string): Promise<ValidateEmailResult> {
         const normalizedEmail = email.toLowerCase().trim();
 
-        // Check for existing review before anything else (fastest check)
-        const existingReview = await prisma.review.findUnique({
-            where: { email: normalizedEmail },
-            select: { status: true },
-        });
-
-        if (existingReview) {
-            return {
-                canReview: false,
-                reason: "already_reviewed",
-                reviewStatus: existingReview.status,
-            };
-        }
-
-        // Look for a lead with a paid order
+        // 1. Find the lead by email
         const lead = await prisma.lead.findFirst({
             where: { email: normalizedEmail },
-            select: {
-                id: true,
-                orders: {
-                    where: { status: "paid" },
-                    select: { id: true },
-                    take: 1,
-                },
-            },
+            select: { id: true },
         });
 
-        if (!lead || lead.orders.length === 0) {
+        if (!lead) {
             return { canReview: false, reason: "no_purchase_found" };
         }
 
-        return { canReview: true, orderId: lead.orders[0].id };
+        // 2. Find all "paid" orders for this lead, including their review status
+        const orders = await prisma.order.findMany({
+            where: {
+                leadId: lead.id,
+                status: "paid",
+            },
+            select: {
+                id: true,
+                review: {
+                    select: { status: true },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+
+        if (orders.length === 0) {
+            return { canReview: false, reason: "no_purchase_found" };
+        }
+
+        // 3. Find the first order that doesn't have a review yet
+        const orderWithoutReview = orders.find((o) => !o.review);
+
+        if (!orderWithoutReview) {
+            // All paid orders already have reviews
+            // We return the status of the most recent review for context
+            return {
+                canReview: false,
+                reason: "already_reviewed",
+                reviewStatus: orders[0].review?.status,
+            };
+        }
+
+        return { canReview: true, orderId: orderWithoutReview.id };
     }
 
     /**
@@ -103,24 +114,31 @@ export class ReviewService {
         const normalizedEmail = dto.email.toLowerCase().trim();
 
         // --- Re-validate: prevent race conditions and bypasses ---
-        const reValidation = await this.validateEmail(normalizedEmail);
-        if (!reValidation.canReview) {
-            if (reValidation.reason === "already_reviewed") {
-                throw new Error("Ya existe una reseña asociada a este email.");
-            }
-            throw new Error("No encontramos una compra pagada asociada a este email.");
-        }
-
-        // Ensure the orderId matches what our validation returned
-        if (reValidation.orderId !== dto.orderId) {
-            throw new Error("El orderId no coincide con la compra asociada a este email.");
-        }
-
-        // Look up the lead for leadId FK
-        const lead = await prisma.lead.findFirst({
-            where: { email: normalizedEmail },
-            select: { id: true },
+        // We validate that the order belongs to the email and doesn't have a review
+        const order = await prisma.order.findFirst({
+            where: {
+                id: dto.orderId,
+                status: "paid",
+                lead: {
+                    email: normalizedEmail,
+                },
+            },
+            select: {
+                id: true,
+                review: { select: { id: true } },
+                leadId: true,
+            },
         });
+
+        if (!order) {
+            throw new Error("No encontramos una compra pagada asociada a este email u orden.");
+        }
+
+        if (order.review) {
+            throw new Error("Esta orden ya tiene una reseña asociada.");
+        }
+
+        const leadId = order.leadId;
 
         // --- Validate image magic bytes BEFORE inserting review ---
         // This way we reject invalid files early without creating a review record.
@@ -143,7 +161,7 @@ export class ReviewService {
                 data: {
                     email: normalizedEmail,
                     orderId: dto.orderId,
-                    leadId: lead?.id ?? null,
+                    leadId: leadId,
                     petName: dto.petName.trim(),
                     rating: dto.rating,
                     comment: dto.comment.trim(),
@@ -228,7 +246,7 @@ export class ReviewService {
                 err instanceof Prisma.PrismaClientKnownRequestError &&
                 err.code === "P2002"
             ) {
-                throw new Error("Ya existe una reseña para este email u orden.");
+                throw new Error("Esta orden ya tiene una reseña asociada.");
             }
             throw err;
         }

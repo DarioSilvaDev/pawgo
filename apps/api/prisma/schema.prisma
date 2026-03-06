@@ -737,7 +737,7 @@ model Review {
   // Relaciones con datos existentes
   orderId String @unique // 1 reseña por orden (hard constraint)
   leadId  String?        // FK a Lead (puede ser null si lead fue eliminado)
-  email   String @unique // 1 reseña por email (principal barrera anti-duplicado)
+  email   String // 1 reseña por email (principal barrera anti-duplicado)
 
   // Contenido
   petName   String
