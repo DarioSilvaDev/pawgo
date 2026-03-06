@@ -3,8 +3,11 @@
 import { useState, useEffect, useRef, Suspense } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
+import imageCompression from "browser-image-compression";
 
 import { Footer } from "@/components/Footer";
+import { MimoButton, MimoLevelBadge } from "@/components/MimoButton";
+import { getMonthlyRanking } from "@/lib/mimo";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Review {
@@ -13,8 +16,12 @@ interface Review {
     rating: number;
     comment: string;
     imageUrl: string | null;
+    imageThumbUrl: string | null;
     purchaseVerified: boolean;
     isFeatured: boolean;
+    mimoCount: number;
+    mimoLevel?: string;
+    mimoIcon?: string;
     createdAt: string;
 }
 
@@ -77,7 +84,7 @@ function ReviewCard({ review, onClick }: { review: Review; onClick: () => void }
         >
             {review.imageUrl ? (
                 <Image
-                    src={review.imageUrl}
+                    src={review.imageThumbUrl || review.imageUrl || ""}
                     alt={`Foto de ${review.petName}`}
                     fill
                     className="object-cover group-hover:scale-110 transition-transform duration-700"
@@ -98,13 +105,12 @@ function ReviewCard({ review, onClick }: { review: Review; onClick: () => void }
                     </div>
                     <p className="font-bold text-sm truncate">{review.petName}</p>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-between gap-1.5">
                     <StarRating value={review.rating} readonly size="sm" />
-                    {review.isFeatured && (
-                        <span className="text-[10px] bg-amber-400 text-amber-950 px-1.5 py-0.5 rounded-full font-bold">
-                            ⭐
-                        </span>
-                    )}
+                    <div className="flex items-center gap-1 bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[10px] font-bold">
+                        <span>{review.mimoIcon || "🐾"}</span>
+                        <span>{review.mimoCount || 0}</span>
+                    </div>
                 </div>
             </div>
 
@@ -128,6 +134,8 @@ function ComunidadPageContent() {
     const [reviews, setReviews] = useState<Review[]>([]);
     const [totalReviews, setTotalReviews] = useState(0);
     const [loadingReviews, setLoadingReviews] = useState(true);
+    const [ranking, setRanking] = useState<Review[]>([]);
+    const [loadingRanking, setLoadingRanking] = useState(true);
 
     // Step 1 — Email
     const [email, setEmail] = useState(searchParams.get("email") ?? "");
@@ -143,6 +151,9 @@ function ComunidadPageContent() {
     const [photoConsent, setPhotoConsent] = useState(false);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [imageError, setImageError] = useState<string>("");
+    const [imageCompressing, setImageCompressing] = useState(false);
+    const [imageInfo, setImageInfo] = useState<string>("");
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState("");
     const [successPetName, setSuccessPetName] = useState("");
@@ -156,9 +167,12 @@ function ComunidadPageContent() {
         setEmailError("");
     };
 
-    // Load reviews on mount
+    // Load reviews and ranking on mount
     useEffect(() => {
-        fetch(`${API_URL}/api/reviews?limit=12&sort=recent`)
+        setLoadingReviews(true);
+        setLoadingRanking(true);
+
+        fetch(`${API_URL}/reviews?limit=12&sort=recent`)
             .then((r) => r.json())
             .then((data) => {
                 setReviews(data.data ?? []);
@@ -166,17 +180,65 @@ function ComunidadPageContent() {
             })
             .catch(console.error)
             .finally(() => setLoadingReviews(false));
+
+        getMonthlyRanking()
+            .then(setRanking)
+            .catch(console.error)
+            .finally(() => setLoadingRanking(false));
     }, []);
 
-    function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    const MAX_IMAGE_SIZE_MB = 15;
+    const COMPRESS_TARGET_MB = 1.5; // compress client-side if above this threshold
+
+    async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
+        e.target.value = ""; // reset so user can re-select the same file
+
+        setImageError("");
+        setImageInfo("");
+        setImageCompressing(false);
         if (!file) return;
-        if (file.size > 5 * 1024 * 1024) {
-            alert("La imagen no debe superar los 5MB.");
+
+        // 1. Validate MIME type
+        if (!ALLOWED_TYPES.includes(file.type)) {
+            setImageError("Solo se permiten imágenes JPG, PNG o WebP.");
             return;
         }
-        setImageFile(file);
-        setImagePreview(URL.createObjectURL(file));
+
+        // 2. Validate size hard limit
+        const sizeMB = file.size / 1024 / 1024;
+        if (sizeMB > MAX_IMAGE_SIZE_MB) {
+            setImageError(
+                `La imagen pesa ${sizeMB.toFixed(1)}MB. El máximo permitido es ${MAX_IMAGE_SIZE_MB}MB.`
+            );
+            return;
+        }
+
+        // 3. Compress client-side if above threshold
+        let finalFile = file;
+        if (sizeMB > COMPRESS_TARGET_MB) {
+            setImageCompressing(true);
+            try {
+                finalFile = await imageCompression(file, {
+                    maxSizeMB: COMPRESS_TARGET_MB,
+                    maxWidthOrHeight: 1920,
+                    useWebWorker: true,
+                    fileType: "image/jpeg",
+                    initialQuality: 0.85,
+                });
+                const finalMB = (finalFile.size / 1024 / 1024).toFixed(1);
+                setImageInfo(`Optimizada: ${sizeMB.toFixed(1)}MB → ${finalMB}MB`);
+            } catch {
+                // Si falla la compresión client-side, el backend comprime igual
+                finalFile = file;
+            } finally {
+                setImageCompressing(false);
+            }
+        }
+
+        setImageFile(finalFile);
+        setImagePreview(URL.createObjectURL(finalFile));
     }
 
     async function handleValidateEmail(e: React.FormEvent) {
@@ -188,7 +250,7 @@ function ComunidadPageContent() {
         }
         setValidatingEmail(true);
         try {
-            const res = await fetch(`${API_URL}/api/reviews/validate-email`, {
+            const res = await fetch(`${API_URL}/reviews/validate-email`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email: email.trim() }),
@@ -229,7 +291,7 @@ function ComunidadPageContent() {
             formData.append("photoConsent", String(photoConsent));
             if (imageFile) formData.append("image", imageFile);
 
-            const res = await fetch(`${API_URL}/api/reviews`, {
+            const res = await fetch(`${API_URL}/reviews`, {
                 method: "POST",
                 headers: { "x-submission-source": "qr_card" },
                 body: formData,
@@ -500,11 +562,19 @@ function ComunidadPageContent() {
                                             <Image src={imagePreview} alt="Preview" fill className="object-cover rounded-xl" />
                                             <button
                                                 type="button"
-                                                onClick={(e) => { e.preventDefault(); setImageFile(null); setImagePreview(null); }}
+                                                onClick={(e) => { e.preventDefault(); setImageFile(null); setImagePreview(null); setImageError(""); setImageInfo(""); }}
                                                 className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
                                             >
                                                 ✕
                                             </button>
+                                        </div>
+                                    ) : imageCompressing ? (
+                                        <div className="text-center p-4">
+                                            <svg className="animate-spin h-8 w-8 mx-auto text-teal-500" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                            </svg>
+                                            <p className="text-sm text-teal-600 font-medium mt-2">Optimizando…</p>
                                         </div>
                                     ) : (
                                         <div className="text-center p-4">
@@ -516,11 +586,31 @@ function ComunidadPageContent() {
                                     <input
                                         id="review-image"
                                         type="file"
-                                        accept="image/jpeg,image/png,image/webp"
+                                        accept="image/jpeg,image/jpg,image/png,image/webp"
                                         onChange={handleImageChange}
+                                        disabled={imageCompressing}
                                         className="hidden"
                                     />
                                 </label>
+                                {imageError && (
+                                    <p className="text-sm text-red-600 mt-2 flex items-center gap-1.5">
+                                        <span>⚠️</span> {imageError}
+                                    </p>
+                                )}
+                                {imageCompressing && (
+                                    <p className="text-sm text-teal-600 mt-2 flex items-center gap-1.5">
+                                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                        </svg>
+                                        Optimizando imagen…
+                                    </p>
+                                )}
+                                {imageInfo && !imageCompressing && (
+                                    <p className="text-sm text-emerald-600 mt-2 flex items-center gap-1.5">
+                                        <span>✅</span> {imageInfo}
+                                    </p>
+                                )}
                             </div>
 
                             {/* Photo consent */}
@@ -544,7 +634,7 @@ function ComunidadPageContent() {
 
                             <button
                                 type="submit"
-                                disabled={submitting}
+                                disabled={submitting || imageCompressing}
                                 className="btn-primary w-full flex items-center justify-center gap-2 text-base"
                             >
                                 {submitting ? (
@@ -587,6 +677,65 @@ function ComunidadPageContent() {
                         >
                             Volver a ver la comunidad
                         </button>
+                    </div>
+                </section>
+            )}
+
+            {/* ── RANKING / PELUDO DEL MES ─────────────────────────────────── */}
+            {ranking.length > 0 && (
+                <section className="max-w-6xl mx-auto px-4 py-8">
+                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-[2.5rem] p-8 md:p-12 border border-amber-100 flex flex-col md:flex-row items-center gap-8 md:gap-12 relative overflow-hidden">
+                        {/* Decorative Background Icons */}
+                        <div className="absolute -top-6 -right-6 text-8xl opacity-10 rotate-12">👑</div>
+                        <div className="absolute -bottom-6 -left-6 text-8xl opacity-10 -rotate-12">⭐</div>
+
+                        {/* Winner Illustration/Photo */}
+                        <div className="relative w-48 h-48 md:w-64 md:h-64 flex-shrink-0 group">
+                            <div className="absolute inset-0 bg-amber-400 rounded-[3rem] rotate-6 group-hover:rotate-12 transition-transform duration-500" />
+                            <div className="absolute inset-0 bg-amber-200 rounded-[3rem] -rotate-3 group-hover:-rotate-6 transition-transform duration-500" />
+                            <div
+                                className="relative w-full h-full rounded-[3rem] overflow-hidden border-4 border-white shadow-xl cursor-pointer"
+                                onClick={() => setSelectedReview(ranking[0])}
+                            >
+                                <Image
+                                    src={ranking[0].imageThumbUrl || ranking[0].imageUrl || ""}
+                                    alt={ranking[0].petName}
+                                    fill
+                                    className="object-cover"
+                                />
+                            </div>
+                            <div className="absolute -top-4 -left-4 bg-amber-400 text-amber-950 font-black px-4 py-2 rounded-2xl shadow-lg -rotate-12 border-2 border-white">
+                                Peludo del Mes 🏆
+                            </div>
+                        </div>
+
+                        {/* Winner Content */}
+                        <div className="flex-1 text-center md:text-left">
+                            <div className="inline-flex items-center gap-2 bg-amber-200 text-amber-900 px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-widest mb-4">
+                                👑 {ranking[0].mimoLevel || "Leyenda Peluda"}
+                            </div>
+                            <h2 className="text-4xl md:text-5xl font-black text-gray-900 leading-tight mb-4">
+                                {ranking[0].petName} <span className="text-teal-500 text-3xl">🐾💚</span>
+                            </h2>
+                            <p className="text-lg text-gray-600 mb-8 max-w-xl">
+                                "{ranking[0].comment?.length > 120 ? ranking[0].comment.slice(0, 120) + "..." : ranking[0].comment}"
+                            </p>
+                            <div className="flex flex-col sm:flex-row items-center gap-4">
+                                <div className="flex items-center gap-2 bg-white px-5 py-3 rounded-2xl shadow-sm border border-amber-100">
+                                    <span className="text-2xl">🦴</span>
+                                    <div className="flex flex-col leading-none">
+                                        <span className="text-xl font-bold text-amber-600">{ranking[0].mimoCount}</span>
+                                        <span className="text-[10px] text-gray-400 uppercase font-black tracking-tight">Mimos recibidos</span>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setSelectedReview(ranking[0])}
+                                    className="px-8 py-3.5 bg-gray-900 text-white font-bold rounded-2xl hover:bg-gray-800 transition-colors shadow-lg"
+                                >
+                                    ¡Ver su historia! ✨
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </section>
             )}
@@ -670,9 +819,15 @@ function ComunidadPageContent() {
                                         {selectedReview.petName.charAt(0).toUpperCase()}
                                     </div>
                                     <div className="flex-1">
-                                        <h3 className="text-3xl font-black text-gray-900 leading-tight mb-1">{selectedReview.petName}</h3>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <h3 className="text-3xl font-black text-gray-900 leading-tight">{selectedReview.petName}</h3>
+                                            <MimoLevelBadge
+                                                level={selectedReview.mimoLevel}
+                                                icon={selectedReview.mimoIcon}
+                                            />
+                                        </div>
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <StarRating value={selectedReview.rating} readonly size="md" />
+                                            <StarRating value={selectedReview.rating} readonly size="sm" />
                                             {selectedReview.purchaseVerified && (
                                                 <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-bold bg-emerald-100 px-2 py-1 rounded-md flex items-center gap-1">
                                                     Verificada
@@ -683,14 +838,24 @@ function ComunidadPageContent() {
                                 </div>
 
                                 <div className="flex-1">
-                                    <div className="relative pt-6">
-                                        <svg className="absolute top-0 -left-2 w-10 h-10 text-teal-100 opacity-60" fill="currentColor" viewBox="0 0 32 32">
-                                            <path d="M10 8c-4.418 0-8 3.582-8 8s3.582 8 8 8c1.11 0 2.162-.224 3.125-.625C13.882 25.12 15.65 26 18 26c2.35 0 4.118-.88 4.875-2.625.963.401 2.015.625 3.125.625 4.418 0 8-3.582 8-8s-3.582-8-8-8c-1.11 0-2.162.224-3.125.625-.757-1.745-2.525-2.625-4.875-2.625-2.35 0-4.118.88-4.875 2.625A7.957 7.957 0 0010 8z" />
-                                            <path d="M11 20.5c0 1.933-1.567 3.5-3.5 3.5S4 22.433 4 20.5 5.567 17 7.5 17s3.5 1.567 3.5 3.5zm21-4.5h-5.2s-1-2.5-3.3-2.5-3.3 2.5-3.3 2.5h-2.4s-1-2.5-3.3-2.5-3.3 2.5-3.3 2.5H8s-1-2.5-3.3-2.5-3.3 2.5-3.3 2.5H1v1s.5.5 1.5.5 1.5-.5 1.5-.5V21c0 1.1.9 2 2 2h24c1.1 0 2-.9 2-2v-4.5s.5.5 1.5.5 1.5-.5 1.5-.5v-1z" />
-                                        </svg>
+                                    <div className="relative pt-6 min-h-[100px]">
                                         <p className="text-gray-700 text-lg leading-relaxed font-medium">
                                             {selectedReview.comment}
                                         </p>
+                                    </div>
+
+                                    {/* Mimo Interaction */}
+                                    <div className="mt-8">
+                                        <MimoButton
+                                            reviewId={selectedReview.id}
+                                            initialCount={selectedReview.mimoCount}
+                                            onMimoAdded={(count, level, icon) => {
+                                                const updatedReview = { ...selectedReview, mimoCount: count, mimoLevel: level, mimoIcon: icon };
+                                                setSelectedReview(updatedReview);
+                                                setReviews(prev => prev.map(r => r.id === selectedReview.id ? updatedReview : r));
+                                                setRanking(prev => prev.map(r => r.id === selectedReview.id ? updatedReview : r));
+                                            }}
+                                        />
                                     </div>
                                 </div>
 

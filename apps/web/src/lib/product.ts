@@ -155,7 +155,7 @@ export async function uploadProductImage(
   console.log("  - File:", file.name, `(${(file.size / 1024 / 1024).toFixed(2)} MB)`);
   console.log("  - ProductId:", productId || "undefined");
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
   console.log("  - API URL:", API_URL);
 
   const token = localStorage.getItem("pawgo_access_token");
@@ -169,11 +169,11 @@ export async function uploadProductImage(
   const formData = new FormData();
   formData.append("file", file);
 
-  console.log("📤 [uploadProductImage] Enviando request a:", `${API_URL}/api/upload/product-image`);
+  console.log("📤 [uploadProductImage] Enviando request a:", `${API_URL}/upload/product-image`);
   const startTime = Date.now();
 
   try {
-    const response = await fetch(`${API_URL}/api/upload/product-image?productId=${productId}`, {
+    const response = await fetch(`${API_URL}/upload/product-image?productId=${productId}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -214,7 +214,7 @@ export async function downloadImage(key: string): Promise<string> {
   console.log("🌐 [downloadImage] Iniciando request de descarga");
   console.log("  - Key:", key);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
   console.log("  - API URL:", API_URL);
 
   const token = localStorage.getItem("pawgo_access_token");
@@ -225,11 +225,11 @@ export async function downloadImage(key: string): Promise<string> {
   }
   console.log("✅ [downloadImage] Token encontrado");
 
-  console.log("📤 [downloadImage] Enviando request a:", `${API_URL}/api/upload/download?key=${key}`);
+  console.log("📤 [downloadImage] Enviando request a:", `${API_URL}/upload/download?key=${key}`);
   const startTime = Date.now();
 
   try {
-    const response = await fetch(`${API_URL}/api/upload/download?key=${key}`, {
+    const response = await fetch(`${API_URL}/upload/download?key=${key}`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,

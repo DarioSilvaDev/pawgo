@@ -26,9 +26,9 @@ function VerifyEmailContent() {
 
       try {
         const API_URL =
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
         const response = await fetch(
-          `${API_URL}/api/auth/verify-email?token=${token}`,
+          `${API_URL}/auth/verify-email?token=${token}`,
           {
             method: "GET",
             headers: {

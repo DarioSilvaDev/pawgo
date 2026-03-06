@@ -76,6 +76,16 @@ export interface UploadParams {
 }
 
 /**
+ * Parámetros para subir un archivo con un key pre-generado (ej: resenas/{reviewId}/medium.ext)
+ */
+export interface UploadWithKeyParams {
+  buffer: Buffer;
+  key: string;
+  mimeType: string;
+  documentType: DocumentType;
+}
+
+/**
  * StorageService - Servicio genérico de almacenamiento en Backblaze B2
  *
  * Responsabilidades:
@@ -167,6 +177,18 @@ export class StorageService {
   }
 
   /**
+   * Genera un key predecible y sin PII para imágenes de reseñas.
+   * Formato: resenas/{reviewId}/medium.webp (o la extensión recibida)
+   * Permite identificar y borrar fácilmente imágenes al moderar reseñas.
+   */
+  generateReviewImageKey(reviewId: string, filename: string): string {
+    // Extraer extensión del nombre original; si no hay, usar 'jpg'
+    const ext = filename.split(".").pop()?.toLowerCase() ?? "jpg";
+    const safeExt = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
+    return `resenas/${reviewId}/medium.${safeExt}`;
+  }
+
+  /**
    * Sube un archivo a Backblaze B2
    */
   private async uploadToB2(buffer: Buffer, key: string, mimeType: string): Promise<void> {
@@ -223,9 +245,36 @@ export class StorageService {
   }
 
   /**
-   * Genera una URL firmada para acceso temporal a un archivo privado
+   * Sube un archivo con un key pre-generado (sin necesidad de authId).
+   * Útil cuando el key se calcula externamente (ej: resenas/{reviewId}/medium.ext).
+   * Valida el archivo según el tipo de documento antes de subir.
    */
-  async getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
+  async uploadWithKey(params: UploadWithKeyParams): Promise<UploadResult> {
+    const { buffer, key, mimeType, documentType } = params;
+
+    // 1. Validar archivo contra la config del tipo de documento
+    this.validateFile(buffer, mimeType, documentType);
+
+    // 2. Subir a B2 con el key provisto
+    await this.uploadToB2(buffer, key, mimeType);
+
+    // 3. Extraer el filename del key para el resultado
+    const filename = key.split("/").pop() ?? key;
+
+    return {
+      filename,
+      key,
+      size: buffer.length,
+      mimeType,
+    };
+  }
+
+  /**
+   * Genera una URL firmada para acceso temporal a un archivo privado.
+   * Por defecto 7 días (604800s) para permitir caching en el browser.
+   * Usar valores menores solo para documentos sensibles (facturas, comprobantes).
+   */
+  async getSignedUrl(key: string, expiresIn: number = 604800): Promise<string> {
     if (!this.bucket) {
       throw new Error("B2_BUCKET no está configurado");
     }

@@ -52,7 +52,7 @@ async function testWebhook(orderId: string, mercadoPagoPaymentId: string) {
     console.log(`   MercadoPago Payment ID: ${payment.mercadoPagoPaymentId || 'N/A'}\n`);
 
     // Simular webhook de MercadoPago
-    const webhookUrl = process.env.API_URL || "http://localhost:3001";
+    const webhookUrl = process.env.API_URL || "http://localhost:3001/api";
     const webhookEndpoint = `${webhookUrl}/api/webhooks/mercadopago`;
 
     console.log("📤 Enviando webhook simulado...");
@@ -77,7 +77,7 @@ async function testWebhook(orderId: string, mercadoPagoPaymentId: string) {
     });
 
     const responseData = await response.json();
-    
+
     console.log(`📥 Respuesta del webhook:`);
     console.log(`   Status: ${response.status}`);
     console.log(`   Body:`, JSON.stringify(responseData, null, 2));
@@ -106,7 +106,7 @@ async function testWebhook(orderId: string, mercadoPagoPaymentId: string) {
         console.log(`   Orden estado: ${updatedOrder.status} ${updatedOrder.status !== order.status ? '✅ (cambió)' : ''}`);
         console.log(`   Pago estado: ${updatedPayment.status} ${updatedPayment.status !== payment.status ? '✅ (cambió)' : ''}`);
         console.log(`   MercadoPago Payment ID: ${updatedPayment.mercadoPagoPaymentId || 'N/A'} ${updatedPayment.mercadoPagoPaymentId !== payment.mercadoPagoPaymentId ? '✅ (actualizado)' : ''}`);
-        
+
         if (updatedOrder.status === "paid") {
           console.log("\n🎉 ¡Orden marcada como pagada!");
           console.log("   Esto debería haber disparado:");

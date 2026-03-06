@@ -32,7 +32,7 @@ interface ApiResponse<T> {
  */
 export async function getProvincias(): Promise<Provincia[]> {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/geo/provincias`, {
+        const response = await fetch(`${API_BASE_URL}/geo/provincias`, {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
@@ -68,7 +68,7 @@ export async function getCiudadesByProvincia(
         }
 
         const response = await fetch(
-            `${API_BASE_URL}/api/geo/ciudades?provinciaId=${encodeURIComponent(provinciaId)}`,
+            `${API_BASE_URL}/geo/ciudades?provinciaId=${encodeURIComponent(provinciaId)}`,
             {
                 method: "GET",
                 headers: {

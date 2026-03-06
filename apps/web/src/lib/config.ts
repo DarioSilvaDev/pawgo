@@ -8,7 +8,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
  */
 export async function getPublicConfig(): Promise<PublicConfig> {
     try {
-        const response = await fetch(`${API_URL}/api/config/public`, {
+        const response = await fetch(`${API_URL}config/public`, {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
