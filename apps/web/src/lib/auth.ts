@@ -4,8 +4,7 @@ import {
   AuthResponse,
   RefreshTokenDto,
 } from "@/shared";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { API_URL } from "./config";
 
 // Token storage keys
 const ACCESS_TOKEN_KEY = "pawgo_access_token";
@@ -101,7 +100,7 @@ async function refreshAccessToken(): Promise<boolean> {
   isRefreshing = true;
   refreshPromise = (async () => {
     try {
-      const response = await fetch(`${API_URL}/api/auth/refresh`, {
+      const response = await fetch(`${API_URL}/auth/refresh`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -166,7 +165,7 @@ export async function fetchAPI(
     ...options.headers,
   };
 
-  let response = await fetch(`${API_URL}/api${endpoint}`, {
+  let response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers,
   });
@@ -181,7 +180,7 @@ export async function fetchAPI(
     if (refreshed) {
       // Retry request with new token
       const newAuthHeader = getAuthHeader();
-      response = await fetch(`${API_URL}/api${endpoint}`, {
+      response = await fetch(`${API_URL}${endpoint}`, {
         ...options,
         headers: {
           ...headers,
@@ -212,7 +211,7 @@ export const authAPI = {
     message: string;
     email: string;
   }> {
-    const response = await fetch(`${API_URL}/api/auth/register`, {
+    const response = await fetch(`${API_URL}/auth/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -236,7 +235,7 @@ export const authAPI = {
    * Login user
    */
   async login(data: LoginDto): Promise<AuthResponse> {
-    const response = await fetch(`${API_URL}/api/auth/login`, {
+    const response = await fetch(`${API_URL}/auth/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -263,7 +262,7 @@ export const authAPI = {
     const refreshToken = getRefreshToken();
     if (refreshToken) {
       try {
-        await fetch(`${API_URL}/api/auth/logout`, {
+        await fetch(`${API_URL}/auth/logout`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -308,7 +307,7 @@ export const authAPI = {
    * Request password reset email
    */
   async forgotPassword(email: string): Promise<{ message: string }> {
-    const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
+    const response = await fetch(`${API_URL}/auth/forgot-password`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -330,7 +329,7 @@ export const authAPI = {
    * Reset password with token
    */
   async resetPassword(token: string, password: string): Promise<{ message: string }> {
-    const response = await fetch(`${API_URL}/api/auth/reset-password`, {
+    const response = await fetch(`${API_URL}/auth/reset-password`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

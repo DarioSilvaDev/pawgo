@@ -1,6 +1,5 @@
 import { getAuthHeader } from "./auth";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { API_URL } from "./config";
 
 /**
  * Upload invoice file
@@ -14,7 +13,7 @@ export async function uploadInvoice(
   formData.append("file", file);
 
   const response = await fetch(
-    `${API_URL}/api/influencer-payments/${paymentId}/upload-invoice`,
+    `${API_URL}/influencer-payments/${paymentId}/upload-invoice`,
     {
       method: "POST",
       headers: {
@@ -46,7 +45,7 @@ export async function uploadPaymentProof(
   formData.append("file", file);
 
   const response = await fetch(
-    `${API_URL}/api/influencer-payments/${paymentId}/upload-payment-proof`,
+    `${API_URL}/influencer-payments/${paymentId}/upload-payment-proof`,
     {
       method: "POST",
       headers: {
@@ -78,7 +77,7 @@ export async function uploadContent(
   formData.append("file", file);
 
   const response = await fetch(
-    `${API_URL}/api/influencer-payments/${paymentId}/upload-content`,
+    `${API_URL}/influencer-payments/${paymentId}/upload-content`,
     {
       method: "POST",
       headers: {

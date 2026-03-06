@@ -1,14 +1,30 @@
 import { PublicConfig, CTAConfig } from "@/shared";
 import { fetchAPI } from "./auth";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+/**
+ * Sanitize API URL to ensure it ends with /api exactly once
+ */
+function sanitizeApiUrl(url: string | undefined): string {
+    const baseUrl = url || "http://localhost:3001";
+    // Remove trailing slashes
+    let sanitized = baseUrl.replace(/\/+$/, "");
+
+    // If it doesn't end with /api, add it
+    if (!sanitized.endsWith("/api")) {
+        sanitized += "/api";
+    }
+
+    return sanitized;
+}
+
+export const API_URL = sanitizeApiUrl(process.env.NEXT_PUBLIC_API_URL);
 
 /**
  * Obtiene la configuración pública desde el backend
  */
 export async function getPublicConfig(): Promise<PublicConfig> {
     try {
-        const response = await fetch(`${API_URL}/api/config/public`, {
+        const response = await fetch(`${API_URL}/config/public`, {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",

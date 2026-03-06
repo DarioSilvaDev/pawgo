@@ -1,4 +1,5 @@
 import { fetchAPI } from "./auth";
+import { API_URL } from "./config";
 
 export interface Product {
   id: string;
@@ -151,7 +152,6 @@ export async function uploadProductImage(
   file: File,
   productId?: string
 ): Promise<{ key: string; filename: string, success: boolean }> {
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
   const token = localStorage.getItem("pawgo_access_token");
 
@@ -165,7 +165,7 @@ export async function uploadProductImage(
   const startTime = Date.now();
 
   try {
-    const response = await fetch(`${API_URL}/api/upload/product-image?productId=${productId}`, {
+    const response = await fetch(`${API_URL}/upload/product-image?productId=${productId}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -191,7 +191,6 @@ export async function uploadProductImage(
 }
 
 export async function downloadImage(key: string): Promise<string> {
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
   const token = localStorage.getItem("pawgo_access_token");
 
@@ -201,7 +200,7 @@ export async function downloadImage(key: string): Promise<string> {
   const startTime = Date.now();
 
   try {
-    const response = await fetch(`${API_URL}/api/upload/download?key=${key}`, {
+    const response = await fetch(`${API_URL}/upload/download?key=${key}`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,

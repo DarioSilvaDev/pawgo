@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { API_URL } from "@/lib/config";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -25,10 +26,8 @@ function VerifyEmailContent() {
       }
 
       try {
-        const API_URL =
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
         const response = await fetch(
-          `${API_URL}/api/auth/verify-email?token=${token}`,
+          `${API_URL}/auth/verify-email?token=${token}`,
           {
             method: "GET",
             headers: {
