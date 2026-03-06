@@ -19,6 +19,7 @@ import {
     type PaymentRejectedPayload,
     type ShipmentCreatedPayload,
     type ShipmentDeliveredPayload,
+    type OrderShippedPayload,
 } from "../shared/events.js";
 import { JOB_REVIEW_REMINDER } from "../jobs/review-reminder.job.js";
 
@@ -118,6 +119,26 @@ export function bootstrapOrderEvents(boss: PgBoss): void {
             } catch (err) {
                 console.error(`[EventBootstrap] Failed to schedule review reminder for order ${orderId}:`, err);
             }
+        }
+    );
+
+    // ── ORDER_SHIPPED → Shipped Notification Email ────────────
+    eventDispatcher.subscribe<OrderShippedPayload>(
+        OrderEventType.ORDER_SHIPPED,
+        async (event: DomainEvent<OrderShippedPayload>) => {
+            const { orderId, leadEmail, leadName, trackingNumber } = event.payload;
+            if (!leadEmail) {
+                console.warn(`[EventBootstrap] ORDER_SHIPPED: no email for order ${orderId}`);
+                return;
+            }
+
+            await emailService.sendOrderShippedIdempotent({
+                idempotencyKey: `ORDER_SHIPPED:${orderId}`,
+                email: leadEmail,
+                name: leadName ?? "Cliente",
+                orderId,
+                trackingNumber,
+            });
         }
     );
 

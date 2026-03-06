@@ -2,6 +2,7 @@
 export { DogSize } from './enums/dog-size.js';
 export { EventType } from './enums/event-type.js';
 export { UserRole } from './enums/user-role.js';
+export { OrderStatus } from './enums/order-status.js';
 
 // Types
 export * from './types/auth.js';

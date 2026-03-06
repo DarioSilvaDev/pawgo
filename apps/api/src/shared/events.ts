@@ -13,6 +13,7 @@ export const OrderEventType = {
     PAYMENT_REJECTED: "PAYMENT_REJECTED",
     PAYMENT_CANCELLED: "PAYMENT_CANCELLED",
     PAYMENT_REFUNDED: "PAYMENT_REFUNDED",
+    ORDER_SHIPPED: "ORDER_SHIPPED",          // ← NUEVO: admin cargó tracking manual
     SHIPMENT_CREATED: "SHIPMENT_CREATED",
     SHIPMENT_IN_TRANSIT: "SHIPMENT_IN_TRANSIT",
     SHIPMENT_DELIVERED: "SHIPMENT_DELIVERED",
@@ -58,6 +59,14 @@ export interface ShipmentCreatedPayload {
     orderId: string;
     shipmentId: string;
     trackingNumber?: string;
+    leadEmail?: string;
+    leadName?: string;
+}
+
+export interface OrderShippedPayload {
+    orderId: string;
+    trackingNumber: string;
+    carrier: string;
     leadEmail?: string;
     leadName?: string;
 }

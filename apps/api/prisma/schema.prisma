@@ -102,6 +102,7 @@ model Lead {
 
   orders                    Order[]
   reviews                   Review[]
+  mimos                     ReviewMimo[]
   miCorreoCustomer          MiCorreoCustomer?
   reservationDiscountCode   DiscountCode? @relation("LeadReservationCode", fields: [reservationDiscountCodeId], references: [id], onDelete: SetNull)
 
@@ -333,6 +334,7 @@ model DiscountCode {
   commissions     Commission[]
   settlements     DiscountCodeSettlement[]
   leadReservation Lead?                    @relation("LeadReservationCode")
+  reviewMonthlyWinners ReviewMonthlyWinner[]
 
   @@index([code])
   @@index([influencerId])
@@ -412,8 +414,11 @@ model Shipment {
   trackingNumber String?
   labelUrl       String?
   carrier        String         @default("correo_argentino")
-  extOrderId     String?        // ID externo enviado a MiCorreo (extOrderId)
-  rawPayload     Json?          // Payload completo de respuesta de MiCorreo
+  extOrderId          String?        // ID externo enviado a MiCorreo (extOrderId)
+  rawPayload          Json?          // Payload completo de respuesta de MiCorreo
+  shippedAt           DateTime?      @db.Timestamptz(3) // Cuándo se marcó como enviado
+  shippedByAdminId    String?        // Auditoría: qué admin cargó el tracking
+  notificationSentAt  DateTime?      @db.Timestamptz(3) // Para idempotencia del email
   createdAt      DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
 
@@ -738,7 +743,8 @@ model Review {
   petName   String
   rating    Int    // 1-5
   comment   String
-  imageUrl  String? // Key B2 de la imagen (ej: "resenas/user-timestamp-photo.jpg")
+  imageUrl       String? // Key B2 de la imagen de 1200px
+  imageThumbUrl  String? // Key B2 de la miniatura de 300px
 
   // Consentimiento de marketing (opcional)
   photoConsent Boolean   @default(false)
@@ -761,17 +767,57 @@ model Review {
   userAgent     String?
   submittedFrom String?  // "qr_card" | "web_direct" | "reminder_email"
 
+  // Gamificación: Mimos
+  mimoCount Int @default(0)
+
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   order Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
   lead  Lead?  @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
+  mimos          ReviewMimo[]
+  monthlyWinners ReviewMonthlyWinner[]
+
   @@index([status])
   @@index([isApproved])
   @@index([isFeatured])
+  @@index([mimoCount])
   @@index([rating])
   @@index([leadId])
   @@index([createdAt])
   @@map("reviews")
+}
+
+model ReviewMimo {
+  id          String   @id @default(cuid())
+  reviewId    String
+  leadId      String?  // Link if user is identified
+  fingerprint String   // Device/IP fingerprint for anonymous
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  lead   Lead?  @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([reviewId])
+  @@index([fingerprint])
+  @@unique([reviewId, leadId]) // One identified mimo per lead
+  @@unique([reviewId, fingerprint]) // One anonymous mimo per fingerprint
+  @@map("review_mimos")
+}
+
+model ReviewMonthlyWinner {
+  id             String   @id @default(cuid())
+  reviewId       String
+  month          String   // Format "YYYY-MM"
+  mimosCount     Int
+  couponCodeId   String?  @unique
+  announcedAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  review       Review        @relation(fields: [reviewId], references: [id])
+  discountCode DiscountCode? @relation(fields: [couponCodeId], references: [id])
+
+  @@unique([month]) // Only one winner per month
+  @@index([month])
+  @@map("review_monthly_winners")
 }
