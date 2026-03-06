@@ -72,10 +72,21 @@ export interface Order {
     discountType: string;
     discountValue: number;
   };
+  shipment?: Shipment | null;
+}
+
+export interface Shipment {
+  id: string;
+  orderId: string;
+  status: string;
+  trackingNumber?: string | null;
+  carrier?: string;
+  shippedAt?: string | null;
+  shippedByAdminId?: string | null;
 }
 
 export interface OrdersResponse {
-  orders: Order[];
+  orders: Order[]
   pagination: {
     page: number;
     limit: number;
@@ -224,6 +235,50 @@ export async function getAllOrders(options?: {
  */
 export async function getOrderDetails(id: string): Promise<Order> {
   const response = await fetchAPI(`/orders/${id}/details`);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: "Error desconocido",
+    }));
+    throw new Error(error.error || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Admin: cargar número de seguimiento (paid | ready_to_ship → shipped)
+ */
+export async function addTrackingNumber(
+  orderId: string,
+  trackingNumber: string
+): Promise<{ order: Order; shipment: Shipment; message: string }> {
+  const response = await fetchAPI(`/orders/${orderId}/shipping`, {
+    method: "PATCH",
+    body: JSON.stringify({ trackingNumber }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: "Error desconocido",
+    }));
+    throw new Error(error.error || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Admin: cambio de estado simple (ej: paid → ready_to_ship)
+ */
+export async function updateOrderStatus(
+  orderId: string,
+  status: string
+): Promise<{ order: Order; message: string }> {
+  const response = await fetchAPI(`/orders/${orderId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({

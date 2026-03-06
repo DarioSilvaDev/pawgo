@@ -1240,6 +1240,190 @@ export class EmailService {
       html,
     });
   }
+
+  /**
+   * Notificación de pedido enviado con número de seguimiento de Correo Argentino
+   */
+  async sendOrderShipped(
+    email: string,
+    name: string,
+    orderId: string,
+    trackingNumber: string
+  ): Promise<void> {
+    const trackingUrl = `https://www.correoargentino.com.ar/formularios/odi?numero=${trackingNumber}`;
+    const orderShortId = orderId.slice(0, 8).toUpperCase();
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .header img { max-width: 200px; height: auto; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+            .success-box { background-color: #d4edda; border-left: 4px solid #28a745; padding: 12px; margin: 20px 0; }
+            .tracking-box { background-color: white; border: 2px solid #00CED1; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center; }
+            .tracking-number { font-size: 24px; font-weight: bold; color: #00CED1; letter-spacing: 2px; }
+            .button { display: inline-block; padding: 12px 24px; background-color: #00CED1; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: bold; }
+            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            ${getEmailHeader()}
+            <div class="content">
+              <h2>📦 ¡Tu pedido fue enviado!</h2>
+              <p>Hola ${name},</p>
+              <div class="success-box">
+                <p style="margin: 0;"><strong>¡Buenas noticias! Tu pedido #${orderShortId} está en camino.</strong></p>
+              </div>
+              <p>Tu pedido fue despachado a través de <strong>Correo Argentino</strong> y ya se encuentra en camino hacia vos.</p>
+              <div class="tracking-box">
+                <p style="margin: 0 0 8px; color: #666;">Número de seguimiento:</p>
+                <p class="tracking-number">${trackingNumber}</p>
+                <p style="margin: 10px 0 0; font-size: 13px; color: #888;">Guardá este número para rastrear tu pedido</p>
+              </div>
+              <div style="text-align: center;">
+                <a href="${trackingUrl}" class="button">🔍 Rastrear mi pedido</a>
+              </div>
+              <p style="font-size: 13px; color: #666;">
+                También podés ingresar el código <strong>${trackingNumber}</strong>
+                en <a href="https://www.correoargentino.com.ar" style="color: #00CED1;">correoargentino.com.ar</a>
+                para ver el estado de tu envío.
+              </p>
+              <p>Los tiempos de entrega habituales son de <strong>3 a 7 días hábiles</strong> según tu localidad.</p>
+              <p>Si tenés alguna consulta, respondé este email y te ayudaremos.</p>
+              <p style="margin-top: 30px;">¡Gracias por confiar en nosotros! 🐾</p>
+              <p><strong>El equipo de PawGo</strong> 💙</p>
+            </div>
+            <div class="footer">
+              <p>© 2026 PawGo. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendViaResend({
+      to: email,
+      subject: `📦 Tu pedido PawGo #${orderShortId} fue enviado — Seguimiento: ${trackingNumber}`,
+      html,
+    });
+  }
+
+  /**
+   * sendOrderShipped con idempotencia via EmailLog
+   */
+  async sendOrderShippedIdempotent(params: {
+    idempotencyKey: string;
+    email: string;
+    name: string;
+    orderId: string;
+    trackingNumber: string;
+  }): Promise<void> {
+    const existing = await prisma.emailLog.findUnique({
+      where: { idempotencyKey: params.idempotencyKey },
+    });
+    if (existing) {
+      console.log(`[Email] ORDER_SHIPPED ya enviado (key: ${params.idempotencyKey}), skip.`);
+      return;
+    }
+
+    await this.sendOrderShipped(
+      params.email,
+      params.name,
+      params.orderId,
+      params.trackingNumber
+    );
+
+    await prisma.emailLog.create({
+      data: {
+        idempotencyKey: params.idempotencyKey,
+        event: "ORDER_SHIPPED",
+        recipient: params.email,
+      },
+    });
+  }
+
+  /**
+   * Send notification to the "Peludo del Mes" winner
+   */
+  async sendMonthlyWinnerNotification(params: {
+    email: string;
+    petName: string;
+    couponCode: string;
+    monthName: string;
+    reviewImageUrl: string;
+  }): Promise<void> {
+    const { email, petName, couponCode, monthName, reviewImageUrl } = params;
+    const shopUrl = `${FRONTEND_URL}/shop`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .header img { max-width: 200px; height: auto; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+            .success-box { background-color: #d4edda; border-left: 4px solid #28a745; padding: 12px; margin: 20px 0; }
+            .prize-box { background-color: #e7f3ff; border: 2px dashed #00CED1; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center; }
+            .coupon-code { font-size: 24px; font-weight: bold; color: #00CED1; letter-spacing: 2px; }
+            .button { display: inline-block; padding: 12px 24px; background-color: #00CED1; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: bold; }
+            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            ${getEmailHeader()}
+            <div class="content">
+              <h2>🏆 ¡Tu peludo es la estrella del mes!</h2>
+              <p>¡Hola! Tenemos noticias emocionantes...</p>
+              <div class="success-box">
+                <p style="margin: 0;"><strong>✅ ¡${petName} ha sido elegido como el Peludo del Mes de ${monthName}!</strong></p>
+              </div>
+              <p>La comunidad de PawGo ha llenado de mimos la foto de ${petName}, y queremos celebrarlo enviándoles un regalo especial.</p>
+              
+              <div style="margin: 20px 0; border-radius: 12px; overflow: hidden; border: 4px solid #00CED1; background-color: white;">
+                <img src="${reviewImageUrl}" alt="${petName}" style="width: 100%; height: auto; display: block;">
+              </div>
+
+              <div class="prize-box">
+                <p style="margin: 0 0 10px 0;"><strong>🎁 Tu premio: Un accesorio sorpresa para ${petName}</strong></p>
+                <p style="font-size: 14px; color: #666;">Canjealo en tu próxima compra usando este código:</p>
+                <p class="coupon-code">${couponCode}</p>
+                <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">(Añadí cualquier accesorio a tu carrito y aplicá el código para que sea GRATIS)</p>
+              </div>
+
+              <div style="text-align: center;">
+                <a href="${shopUrl}" class="button">Elegir Regalo 🦴</a>
+              </div>
+
+              <p>Además, ${petName} será la cara de nuestra comunidad en la web y nuestras redes sociales durante todo el mes.</p>
+              <p><strong>¡Gracias por formar parte de la familia PawGo!</strong> 🐾</p>
+              <p style="margin-top: 30px;">Con cariño,</p>
+              <p><strong>El equipo de PawGo</strong> 💙</p>
+            </div>
+            <div class="footer">
+              <p>© 2026 PawGo. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendViaResend({
+      to: email,
+      subject: `🏆 ¡${petName} es el Peludo del Mes en PawGo! 🐾`,
+      html,
+    });
+  }
 }
 
 // Export singleton instance

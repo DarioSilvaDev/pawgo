@@ -3,17 +3,36 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { getOrderDetails, type Order } from "@/lib/order";
+import {
+  getOrderDetails,
+  addTrackingNumber,
+  updateOrderStatus,
+  type Order,
+} from "@/lib/order";
 import { useToast } from "@/components/ui/useToast";
 import { useAuth } from "@/contexts/AuthContext";
 import Link from "next/link";
 
 const STATUS_COLORS: Record<string, string> = {
+  awaiting_payment: "bg-yellow-100 text-yellow-800",
   pending: "bg-yellow-100 text-yellow-800",
   paid: "bg-blue-100 text-blue-800",
+  ready_to_ship: "bg-orange-100 text-orange-800",
   shipped: "bg-purple-100 text-purple-800",
   delivered: "bg-green-100 text-green-800",
   cancelled: "bg-red-100 text-red-800",
+  refunded: "bg-gray-100 text-gray-800",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  awaiting_payment: "Esperando pago",
+  pending: "Pendiente",
+  paid: "Pago confirmado",
+  ready_to_ship: "Preparado para envío",
+  shipped: "Enviado",
+  delivered: "Entregado",
+  cancelled: "Cancelado",
+  refunded: "Reembolsado",
 };
 
 const PAYMENT_STATUS_COLORS: Record<string, string> = {
@@ -24,6 +43,296 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-red-100 text-red-800",
 };
 
+// ─────────────────────────────────────────────────────────────
+// TrackingSection — Panel de gestión de envío (admin only)
+// ─────────────────────────────────────────────────────────────
+function TrackingSection({
+  order,
+  onSuccess,
+}: {
+  order: Order;
+  onSuccess: () => void;
+}) {
+  const { showToast } = useToast();
+  const [showTrackingInput, setShowTrackingInput] = useState(false);
+  const [trackingInput, setTrackingInput] = useState("");
+  const [loadingTracking, setLoadingTracking] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState(false);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [confirmingReady, setConfirmingReady] = useState(false);
+  const [confirmingShip, setConfirmingShip] = useState(false);
+
+  const trackingNumber = order.shipment?.trackingNumber;
+  const status = order.status;
+
+  // ── shipped con tracking → mostrar info readonly
+  if (status === "shipped" && trackingNumber) {
+    return (
+      <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <span>📦</span> Envío
+        </h2>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="px-3 py-1 bg-purple-100 text-purple-800 text-sm font-semibold rounded-full">
+            ✓ Enviado
+          </span>
+        </div>
+        <div className="bg-white border border-purple-200 rounded-lg p-4 text-center">
+          <p className="text-sm text-gray-500 mb-1">Número de seguimiento</p>
+          <p className="text-2xl font-bold text-purple-700 tracking-widest">
+            {trackingNumber}
+          </p>
+        </div>
+        <a
+          href={`https://www.correoargentino.com.ar/formularios/odi?numero=${trackingNumber}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-flex items-center gap-2 text-sm text-purple-700 hover:text-purple-900 font-medium"
+        >
+          🔍 Rastrear en Correo Argentino ↗
+        </a>
+      </div>
+    );
+  }
+
+  // ── shipped sin tracking
+  if (status === "shipped" && !trackingNumber) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">📦 Envío</h2>
+        <p className="text-sm text-gray-500">
+          Enviado (sin número de tracking registrado)
+        </p>
+      </div>
+    );
+  }
+
+  // ── Solo paid o ready_to_ship muestran acciones
+  if (status !== "paid" && status !== "ready_to_ship") {
+    return null;
+  }
+
+  const handleMarkReady = async () => {
+    setLoadingStatus(true);
+    try {
+      await updateOrderStatus(order.id, "ready_to_ship");
+      showToast({
+        type: "success",
+        message: "✅ Orden marcada como preparada para envío.",
+      });
+      onSuccess();
+    } catch (err) {
+      showToast({
+        type: "error",
+        message:
+          err instanceof Error ? err.message : "Error al actualizar el estado",
+      });
+    } finally {
+      setLoadingStatus(false);
+    }
+  };
+
+  const handleAddTracking = async () => {
+    const cleaned = trackingInput.trim().toUpperCase();
+    if (!cleaned) {
+      setTrackingError("El número de seguimiento es requerido.");
+      return;
+    }
+    if (!/^[A-Z0-9]+$/i.test(cleaned)) {
+      setTrackingError("Solo se permiten letras y números.");
+      return;
+    }
+    setTrackingError(null);
+    setLoadingTracking(true);
+    try {
+      await addTrackingNumber(order.id, cleaned);
+      showToast({
+        type: "success",
+        message: "✅ Tracking guardado. Email enviado al cliente.",
+      });
+      onSuccess();
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Error al guardar el tracking";
+      setTrackingError(msg);
+      showToast({ type: "error", message: `❌ ${msg}` });
+    } finally {
+      setLoadingTracking(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <span>📦</span> Gestión de envío
+      </h2>
+
+      <div className="space-y-3">
+        {/* Acción 1: paid → ready_to_ship */}
+        {status === "paid" && (
+          <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+            <div className="mb-3">
+              <p className="text-sm font-medium text-gray-800">
+                📋 ¿Ya preparaste el paquete?
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Marcalo como preparado cuando esté listo para llevar al correo.
+              </p>
+            </div>
+
+            {!confirmingReady ? (
+              <button
+                onClick={() => setConfirmingReady(true)}
+                className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors"
+              >
+                Marcar como preparado
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-300 rounded-lg px-4 py-3">
+                <span className="text-yellow-700 text-sm font-medium">⚠️ ¿Confirmás este cambio de estado?</span>
+                <div className="flex gap-2 ml-auto">
+                  <button
+                    onClick={handleMarkReady}
+                    disabled={loadingStatus}
+                    className="px-3 py-1.5 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {loadingStatus ? (
+                      <span className="flex items-center gap-2">
+                        <span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full"></span>
+                        Guardando...
+                      </span>
+                    ) : (
+                      "Sí, confirmar"
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setConfirmingReady(false)}
+                    disabled={loadingStatus}
+                    className="px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Acción 2: cargar tracking (paid y ready_to_ship) */}
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm font-medium text-gray-800 mb-1">
+            🚚 ¿Ya despachaste el paquete en Correo Argentino?
+          </p>
+          <p className="text-xs text-gray-500 mb-3">
+            Cargá el número de seguimiento del comprobante. El cliente recibirá
+            un email automáticamente.
+          </p>
+
+          {!showTrackingInput ? (
+            <button
+              onClick={() => setShowTrackingInput(true)}
+              className="px-4 py-2 bg-primary-turquoise text-white text-sm font-medium rounded-lg hover:bg-primary-turquoise/90 transition-colors"
+            >
+              Cargar seguimiento
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={trackingInput}
+                  onChange={(e) => {
+                    setTrackingInput(e.target.value);
+                    setTrackingError(null);
+                    setConfirmingShip(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !confirmingShip && trackingInput.trim()) {
+                      setConfirmingShip(true);
+                    }
+                  }}
+                  placeholder="Ej: RE123456789AR"
+                  disabled={loadingTracking}
+                  autoFocus
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-turquoise uppercase disabled:opacity-50"
+                />
+                {!confirmingShip ? (
+                  <button
+                    onClick={() => {
+                      if (!trackingInput.trim()) {
+                        setTrackingError("El número de seguimiento es requerido.");
+                        return;
+                      }
+                      if (!/^[A-Z0-9]+$/i.test(trackingInput.trim())) {
+                        setTrackingError("Solo se permiten letras y números.");
+                        return;
+                      }
+                      setTrackingError(null);
+                      setConfirmingShip(true);
+                    }}
+                    disabled={loadingTracking || !trackingInput.trim()}
+                    className="px-4 py-2 bg-primary-turquoise text-white text-sm font-medium rounded-lg hover:bg-primary-turquoise/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Confirmar envío
+                  </button>
+                ) : null}
+                <button
+                  onClick={() => {
+                    setShowTrackingInput(false);
+                    setTrackingInput("");
+                    setTrackingError(null);
+                    setConfirmingShip(false);
+                  }}
+                  disabled={loadingTracking}
+                  className="px-3 py-2 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+              {trackingError && (
+                <p className="text-red-600 text-xs mt-1">⚠️ {trackingError}</p>
+              )}
+              {confirmingShip && (
+                <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-300 rounded-lg px-4 py-3">
+                  <span className="text-yellow-700 text-sm font-medium">
+                    ⚠️ Se cambiará el estado a <strong>Enviado</strong> y se notificará al cliente. ¿Confirmás?
+                  </span>
+                  <div className="flex gap-2 ml-auto">
+                    <button
+                      onClick={handleAddTracking}
+                      disabled={loadingTracking}
+                      className="px-3 py-1.5 bg-primary-turquoise text-white text-sm font-medium rounded-lg hover:bg-primary-turquoise/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {loadingTracking ? (
+                        <span className="flex items-center gap-2">
+                          <span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full"></span>
+                          Enviando...
+                        </span>
+                      ) : (
+                        "Sí, enviar"
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setConfirmingShip(false)}
+                      disabled={loadingTracking}
+                      className="px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// OrderDetailsPage
+// ─────────────────────────────────────────────────────────────
 export default function OrderDetailsPage() {
   const { user, isAdmin } = useAuth();
   const router = useRouter();
@@ -81,9 +390,7 @@ export default function OrderDetailsPage() {
     });
   };
 
-  if (!user || !isAdmin) {
-    return null;
-  }
+  if (!user || !isAdmin) return null;
 
   if (loading) {
     return (
@@ -142,28 +449,19 @@ export default function OrderDetailsPage() {
                 </h2>
                 <div className="flex items-center gap-4">
                   <span
-                    className={`px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full ${
-                      STATUS_COLORS[order.status] ||
-                      "bg-gray-100 text-gray-800"
-                    }`}
+                    className={`px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-800"
+                      }`}
                   >
-                    {order.status === "pending"
-                      ? "Pendiente"
-                      : order.status === "paid"
-                      ? "Pagado"
-                      : order.status === "shipped"
-                      ? "Enviado"
-                      : order.status === "delivered"
-                      ? "Entregado"
-                      : order.status === "cancelled"
-                      ? "Cancelado"
-                      : order.status}
+                    {STATUS_LABELS[order.status] || order.status}
                   </span>
                   <span className="text-sm text-gray-500">
                     Creada: {formatDate(order.createdAt)}
                   </span>
                 </div>
               </div>
+
+              {/* TrackingSection — admin shipping actions */}
+              <TrackingSection order={order} onSuccess={loadOrder} />
 
               {/* Order Items */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -182,8 +480,7 @@ export default function OrderDetailsPage() {
                             {item.product?.name || item.name || "Producto"}
                             {item.productVariant?.name && (
                               <span className="text-gray-500">
-                                {" "}
-                                - {item.productVariant.name}
+                                {" "}- {item.productVariant.name}
                               </span>
                             )}
                           </p>
@@ -207,7 +504,9 @@ export default function OrderDetailsPage() {
                       </div>
                     ))
                   ) : (
-                    <p className="text-gray-500">No hay productos en esta orden</p>
+                    <p className="text-gray-500">
+                      No hay productos en esta orden
+                    </p>
                   )}
                 </div>
               </div>
@@ -234,22 +533,21 @@ export default function OrderDetailsPage() {
                             </p>
                           </div>
                           <span
-                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              PAYMENT_STATUS_COLORS[payment.status] ||
+                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${PAYMENT_STATUS_COLORS[payment.status] ||
                               "bg-gray-100 text-gray-800"
-                            }`}
+                              }`}
                           >
                             {payment.status === "pending"
                               ? "Pendiente"
                               : payment.status === "approved"
-                              ? "Aprobado"
-                              : payment.status === "rejected"
-                              ? "Rechazado"
-                              : payment.status === "refunded"
-                              ? "Reembolsado"
-                              : payment.status === "cancelled"
-                              ? "Cancelado"
-                              : payment.status}
+                                ? "Aprobado"
+                                : payment.status === "rejected"
+                                  ? "Rechazado"
+                                  : payment.status === "refunded"
+                                    ? "Reembolsado"
+                                    : payment.status === "cancelled"
+                                      ? "Cancelado"
+                                      : payment.status}
                           </span>
                         </div>
                         <div className="mt-2">
@@ -307,7 +605,9 @@ export default function OrderDetailsPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-gray-500">No hay información del cliente</p>
+                  <p className="text-gray-500">
+                    No hay información del cliente
+                  </p>
                 )}
               </div>
 

@@ -3,8 +3,10 @@ import { ReviewController } from "../controllers/review.controller.js";
 import { ReviewService } from "../services/review.service.js";
 import { StorageService } from "../services/storage.service.js";
 import { EmailService } from "../services/email.service.js";
-import { createAuthMiddleware } from "../auth/middleware/auth.middleware.js";
+import { createAuthMiddleware, createOptionalAuthMiddleware } from "../auth/middleware/auth.middleware.js";
 import { TokenService } from "../auth/services/token.service.js";
+import { MimoController } from "../controllers/mimo.controller.js";
+import { MimoService } from "../services/mimo.service.js";
 
 export async function reviewRoutes(
     fastify: FastifyInstance,
@@ -15,9 +17,12 @@ export async function reviewRoutes(
 ) {
     const { tokenService, storageService } = options;
     const emailService = new EmailService();
-    const reviewService = new ReviewService(storageService, emailService);
+    const mimoService = new MimoService(storageService);
+    const reviewService = new ReviewService(storageService, emailService, mimoService);
     const controller = new ReviewController(reviewService);
+    const mimoController = new MimoController(mimoService);
     const authenticate = createAuthMiddleware(tokenService);
+    const authenticateOptional = createOptionalAuthMiddleware(tokenService);
 
     // ──────────────────────────────────────────
     // Public routes
@@ -42,6 +47,22 @@ export async function reviewRoutes(
      * Query: ?page=1&limit=12&rating=5&featured=true&sort=recent|featured
      */
     fastify.get("/reviews", controller.getReviews);
+
+    /**
+     * POST /api/reviews/:id/mmo
+     * Regalá un mimo.
+     */
+    fastify.post(
+        "/reviews/:id/mimo",
+        { preHandler: authenticateOptional },
+        mimoController.addMimo
+    );
+
+    /**
+     * GET /api/reviews/ranking
+     * Ranking mensual de mascotas.
+     */
+    fastify.get("/reviews/ranking", mimoController.getMonthlyRanking);
 
     // ──────────────────────────────────────────
     // Admin routes (protected)

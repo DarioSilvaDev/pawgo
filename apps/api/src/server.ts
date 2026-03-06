@@ -22,6 +22,7 @@ import { miCorreoRoutes } from "./routes/micorreo/index.js";
 import { leadNotificationRoutes } from "./routes/lead-notification.routes.js";
 import { reviewRoutes } from "./routes/review.routes.js";
 import { registerReviewReminderWorker } from "./jobs/review-reminder.job.js";
+import { registerMonthlyWinnerWorker, scheduleMonthlyWinnerJob } from "./jobs/monthly-winner.job.js";
 import { TokenService } from "./auth/services/token.service.js";
 import { AuthService } from "./auth/services/auth.service.js";
 import { DiscountCodeService } from "./services/discount-code.service.js";
@@ -77,9 +78,11 @@ await fastify.register(jwt, {
 });
 
 // Multipart Plugin (for file uploads)
+// 6MB hard limit at server level (business limit is 5MB, +1MB margin for form fields)
 await fastify.register(multipart, {
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
+    fileSize: 6 * 1024 * 1024, // 6MB
+    files: 5, // max 5 files per request
   },
 });
 
@@ -120,6 +123,8 @@ console.log("[api] pg-boss started");
 
 // Register background job workers
 await registerReviewReminderWorker(boss);
+await registerMonthlyWinnerWorker(boss);
+await scheduleMonthlyWinnerJob(boss);
 
 // Bootstrap domain event handlers with boss access
 bootstrapOrderEvents(boss);

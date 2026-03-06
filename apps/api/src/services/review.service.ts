@@ -1,6 +1,9 @@
 import { prisma } from "../config/prisma.client.js";
 import { StorageService } from "./storage.service.js";
 import { EmailService } from "./email.service.js";
+import { MimoService } from "./mimo.service.js";
+import { ImageValidationService } from "./image-validation.service.js";
+import { ImageProcessingService } from "./image-processing.service.js";
 import { Prisma } from "@prisma/client";
 
 export interface ValidateEmailResult {
@@ -36,10 +39,20 @@ export interface GetReviewsQuery {
 export class ReviewService {
     private storageService: StorageService;
     private emailService: EmailService;
+    private mimoService: MimoService;
+    private imageValidationService: ImageValidationService;
+    private imageProcessingService: ImageProcessingService;
 
-    constructor(storageService: StorageService, emailService: EmailService) {
+    constructor(
+        storageService: StorageService,
+        emailService: EmailService,
+        mimoService: MimoService,
+    ) {
         this.storageService = storageService;
         this.emailService = emailService;
+        this.mimoService = mimoService;
+        this.imageValidationService = new ImageValidationService();
+        this.imageProcessingService = new ImageProcessingService();
     }
 
     /**
@@ -109,25 +122,22 @@ export class ReviewService {
             select: { id: true },
         });
 
-        // --- Upload image to Backblaze B2 if provided ---
-        let imageUrl: string | undefined;
+        // --- Validate image magic bytes BEFORE inserting review ---
+        // This way we reject invalid files early without creating a review record.
+        // The image is uploaded AFTER we have the reviewId, so the key is deterministic.
+        let imageValidated = false;
         if (dto.imageBuffer && dto.imageName && dto.imageMimeType) {
             try {
-                const uploadResult = await this.storageService.upload({
-                    buffer: dto.imageBuffer,
-                    originalName: dto.imageName,
-                    mimeType: dto.imageMimeType,
-                    authId: normalizedEmail,
-                    documentType: "REVIEW_IMAGES",
-                });
-                imageUrl = uploadResult.key;
+                this.imageValidationService.validateMagicBytes(dto.imageBuffer, dto.imageMimeType);
+                imageValidated = true;
             } catch (err) {
-                // Image upload failure does NOT block review submission
-                console.warn("[ReviewService] Image upload failed, proceeding without image:", err);
+                // Invalid image: proceed without it, log the rejection
+                console.warn("[ReviewService] Image validation failed, proceeding without image:", err);
             }
         }
 
-        // --- Insert review ---
+        // --- Insert review (without image first) ---
+        let imageUrl: string | undefined;
         try {
             const review = await prisma.review.create({
                 data: {
@@ -137,7 +147,7 @@ export class ReviewService {
                     petName: dto.petName.trim(),
                     rating: dto.rating,
                     comment: dto.comment.trim(),
-                    imageUrl: imageUrl ?? null,
+                    imageUrl: null, // will be updated after upload if image provided
                     photoConsent: dto.photoConsent,
                     consentedAt: dto.photoConsent ? new Date() : null,
                     ipAddress: dto.ipAddress ?? null,
@@ -149,6 +159,59 @@ export class ReviewService {
                 },
                 select: { id: true, status: true },
             });
+
+            // --- Upload image to Backblaze B2 if provided and valid ---
+            // Now we have review.id, so we can build a clean, PII-free key.
+            if (dto.imageBuffer && dto.imageName && dto.imageMimeType && imageValidated) {
+                try {
+                    // 1. Compress + convert to WebP with sharp
+                    const processed = await this.imageProcessingService.processReviewImage(
+                        dto.imageBuffer
+                    );
+
+                    console.log(
+                        `[ReviewService] Imagen comprimida: ${dto.imageBuffer.length} bytes → ` +
+                        `${processed.sizeBytes} bytes (-${processed.reductionPercent}%) ` +
+                        `[${processed.width}×${processed.height}px WebP]`
+                    );
+
+                    // 2. Generate thumbnail (300px square cover)
+                    const thumb = await this.imageProcessingService.generateThumbnail(
+                        dto.imageBuffer,
+                    );
+
+                    // 3. Generate keys — always .webp
+                    const imageKey = `resenas/${review.id}/medium.webp`;
+                    const thumbKey = `resenas/${review.id}/thumb.webp`;
+
+                    // 4. Upload both optimized buffers to B2
+                    await Promise.all([
+                        this.storageService.uploadWithKey({
+                            buffer: processed.buffer,
+                            key: imageKey,
+                            mimeType: "image/webp",
+                            documentType: "REVIEW_IMAGES",
+                        }),
+                        this.storageService.uploadWithKey({
+                            buffer: thumb.buffer,
+                            key: thumbKey,
+                            mimeType: "image/webp",
+                            documentType: "REVIEW_IMAGES",
+                        })
+                    ]);
+
+                    // 5. Update review record with both image keys
+                    await prisma.review.update({
+                        where: { id: review.id },
+                        data: {
+                            imageUrl: imageKey,
+                            imageThumbUrl: thumbKey,
+                        },
+                    });
+                } catch (err) {
+                    console.warn("[ReviewService] Image processing/upload failed, review saved without image:", err);
+                }
+            }
 
             // Log on the order for auditing
             await prisma.orderEventLog.create({
@@ -205,6 +268,8 @@ export class ReviewService {
                     rating: true,
                     comment: true,
                     imageUrl: true,
+                    imageThumbUrl: true,
+                    mimoCount: true, // Added
                     purchaseVerified: true,
                     isFeatured: true,
                     createdAt: true,
@@ -219,11 +284,21 @@ export class ReviewService {
             reviews.map(async (r) => ({
                 ...r,
                 imageUrl: r.imageUrl ? await this.storageService.getSignedUrl(r.imageUrl) : null,
+                imageThumbUrl: r.imageThumbUrl ? await this.storageService.getSignedUrl(r.imageThumbUrl) : null,
             }))
         );
 
+        const enrichedReviews = reviewsWithUrls.map(review => {
+            const { level, icon } = MimoService.calculateLevel(review.mimoCount || 0);
+            return {
+                ...review,
+                mimoLevel: level,
+                mimoIcon: icon
+            };
+        });
+
         return {
-            data: reviewsWithUrls,
+            data: enrichedReviews,
             pagination: {
                 page,
                 limit,
