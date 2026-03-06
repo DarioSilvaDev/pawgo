@@ -23,7 +23,7 @@ export async function orderRoutes(
   fastify.post("/orders/:id/apply-discount", orderController.applyDiscountCode);
   fastify.post("/orders/:id/payment", orderController.createPayment);
   fastify.get("/payments/:id/status", orderController.getPaymentStatus);
-  
+
   // Admin routes (protected)
   fastify.get(
     "/orders",
@@ -40,7 +40,25 @@ export async function orderRoutes(
     },
     orderController.getOrderDetails
   );
-  
+
+  // Admin: cargar tracking number (paid | ready_to_ship → shipped)
+  fastify.patch(
+    "/orders/:id/shipping",
+    {
+      preHandler: authenticate,
+    },
+    orderController.addTracking
+  );
+
+  // Admin: cambio de estado simple (paid → ready_to_ship, etc.)
+  fastify.patch(
+    "/orders/:id/status",
+    {
+      preHandler: authenticate,
+    },
+    orderController.updateStatus
+  );
+
   // Testing route - simulate complete order with payment
   fastify.post("/orders/simulate", orderController.simulateCompleteOrder);
 }

@@ -13,6 +13,7 @@ export interface Order {
     items: OrderItem[];
     shippingAddress?: Address;
     shippingMethod?: string;
+    payerEmail?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -25,6 +26,7 @@ export interface OrderItem {
     size?: string; // Tamaño específico
     quantity: number;
     unitPrice: number; // Precio unitario sin descuento
+    imageUrl?: string; // URL de la imagen del producto
     discount: number; // Descuento aplicado a este item
     subtotal: number; // unitPrice * quantity
     total: number; // subtotal - discount

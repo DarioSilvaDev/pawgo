@@ -219,7 +219,33 @@ export function createOrderController(
           shippingCost: prismaNumber(prismaDecimal(order.shippingCost)),
           total: prismaNumber(prismaDecimal(order.total)),
           currency: order.currency,
-          items: order.itemsSnapshot as unknown as OrderItem[],
+          payerEmail: order.lead?.email,
+          // Use items from query (which includes discount metadata if applicable) 
+          // instead of the raw snapshot
+          items: order.items.map(item => {
+            const product = (item as any).product;
+            let imageUrl: string | undefined;
+            if (product?.images && product.images.length > 0) {
+              // Note: Ideally we'd inject storageService, 
+              // but we can construct the public URL if it's predictable or use a placeholder
+              // For now, let's just pass the key and we might need to fix it in MercadoPagoService
+              imageUrl = product.images[0];
+            }
+
+            return {
+              productId: item.productId || "",
+              productName: item.name,
+              variantId: item.productVariantId || undefined,
+              variantName: (item.metadata as any)?.variantName,
+              size: (item.metadata as any)?.size,
+              quantity: item.quantity,
+              unitPrice: prismaNumber(prismaDecimal(item.unitPrice)),
+              imageUrl: imageUrl,
+              subtotal: prismaNumber(prismaDecimal(item.unitPrice)) * item.quantity,
+              discount: (item.metadata as any)?.discount || 0,
+              total: (item.metadata as any)?.totalAfterDiscount || prismaNumber(prismaDecimal(item.totalPrice))
+            };
+          }),
           shippingAddress: order.shippingAddress
             ? isAddress(order.shippingAddress)
               ? (order.shippingAddress as Address)
@@ -442,6 +468,103 @@ export function createOrderController(
           return;
         }
 
+        throw error;
+      }
+    },
+
+    // ──────────────────────────────────────────────────────────────
+    // PATCH /orders/:id/shipping  — Admin carga tracking number
+    // ──────────────────────────────────────────────────────────────
+    addTracking: async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const user = request.user as { role?: string; userId?: string } | undefined;
+        if (!user || user.role !== "admin") {
+          reply.status(403).send({ error: "Solo los administradores pueden cargar el número de seguimiento" });
+          return;
+        }
+
+        const { id } = request.params as { id: string };
+
+        const addTrackingSchema = z.object({
+          trackingNumber: z
+            .string()
+            .min(1, "El número de seguimiento es requerido")
+            .max(50, "El número de seguimiento no puede superar los 50 caracteres")
+            .regex(/^[A-Z0-9]+$/i, "El número de seguimiento solo puede contener letras y números")
+            .transform((val) => val.trim().toUpperCase()),
+        });
+
+        const { trackingNumber } = addTrackingSchema.parse(request.body);
+
+        const result = await orderService.addTrackingNumber(id, trackingNumber, user.userId);
+
+        reply.send({
+          message: "Número de seguimiento cargado exitosamente. Email enviado al cliente.",
+          order: result.order,
+          shipment: result.shipment,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          reply.status(400).send({ error: "Validación inválida", details: error.errors });
+          return;
+        }
+        if (error instanceof Error) {
+          const status =
+            error.message.includes("no encontrada") ? 404
+              : error.message.includes("Solo se puede") ? 422
+                : error.message.includes("ya tiene") ? 409
+                  : 400;
+          reply.status(status).send({ error: error.message });
+          return;
+        }
+        throw error;
+      }
+    },
+
+    // ──────────────────────────────────────────────────────────────
+    // PATCH /orders/:id/status  — Admin cambia estado (eg paid→ready_to_ship)
+    // ──────────────────────────────────────────────────────────────
+    updateStatus: async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const user = request.user as { role?: string; userId?: string } | undefined;
+        if (!user || user.role !== "admin") {
+          reply.status(403).send({ error: "Solo los administradores pueden cambiar el estado de una orden" });
+          return;
+        }
+
+        const { id } = request.params as { id: string };
+
+        const updateStatusSchema = z.object({
+          status: z.enum(["ready_to_ship", "cancelled", "refunded"] as const, {
+            errorMap: () => ({ message: "Estado inválido. Estados permitidos: ready_to_ship, cancelled, refunded" }),
+          }),
+        });
+
+        const { status } = updateStatusSchema.parse(request.body);
+
+        const order = await orderService.updateOrderStatus(
+          id,
+          status as OrderStatus,
+          user.userId
+        );
+
+        reply.send({
+          message: `Estado de la orden actualizado a '${status}'.`,
+          order,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          reply.status(400).send({ error: "Validación inválida", details: error.errors });
+          return;
+        }
+        if (error instanceof Error) {
+          const status =
+            error.message.includes("no encontrada") ? 404
+              : error.message.includes("Transición inválida") ? 422
+                : 400;
+          reply.status(status).send({ error: error.message });
+          return;
+        }
         throw error;
       }
     },

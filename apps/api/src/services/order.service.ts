@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma, OrderStatus } from "@prisma/client";
+import { PrismaClient, Prisma, OrderStatus, ShipmentStatus } from "@prisma/client";
 import { CreateOrderDto, OrderItem } from "../shared/index.js";
 import { DiscountCodeService } from "./discount-code.service.js";
 import { CommissionService } from "./commission.service.js";
@@ -17,6 +17,7 @@ import {
   type PaymentApprovedPayload,
   type PaymentRejectedPayload,
   type OrderCreatedPayload,
+  type OrderShippedPayload,
 } from "../shared/events.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -25,12 +26,19 @@ import {
 
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.awaiting_payment]: [OrderStatus.paid, OrderStatus.cancelled],
-  [OrderStatus.paid]: [OrderStatus.ready_to_ship, OrderStatus.cancelled, OrderStatus.refunded],
-  [OrderStatus.ready_to_ship]: [OrderStatus.shipped],
+  [OrderStatus.paid]: [
+    OrderStatus.ready_to_ship,   // Admin marca el paquete como preparado
+    OrderStatus.shipped,          // Atajo: admin carga tracking directamente
+    OrderStatus.cancelled,
+    OrderStatus.refunded,
+  ],
+  [OrderStatus.ready_to_ship]: [
+    OrderStatus.shipped,          // Admin carga tracking y despacha
+  ],
   [OrderStatus.shipped]: [OrderStatus.delivered],
   [OrderStatus.delivered]: [], // terminal
   [OrderStatus.cancelled]: [], // terminal
-  [OrderStatus.refunded]: [], // terminal
+  [OrderStatus.refunded]: [],  // terminal
 };
 
 export class OrderService {
@@ -268,10 +276,14 @@ export class OrderService {
 
     await prisma.$transaction(async (tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">) => {
       for (const item of updatedItemDiscounts) {
+        const existingItem = items.find(i => i.id === item.id);
+        const existingMetadata = (existingItem?.metadata as any) || {};
+
         await tx.orderItem.update({
           where: { id: item.id },
           data: {
             metadata: {
+              ...existingMetadata,
               discount: prismaNumber(prismaDecimal(item.discount)),
               totalAfterDiscount: prismaNumber(prismaDecimal(item.subtotal.sub(item.discount))),
             } as unknown as Prisma.InputJsonValue,
@@ -606,5 +618,155 @@ export class OrderService {
       console.error(`❌ [Shipping] Error calculando costo para orden ${orderId}:`, error);
       return null;
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Update Order Status (simple admin transition — no tracking)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * Transitions an order to a new status without requiring additional data.
+   * Used by admin for transitions like paid → ready_to_ship.
+   * Validates transition via state machine guard.
+   */
+  async updateOrderStatus(
+    orderId: string,
+    newStatus: OrderStatus,
+    adminId?: string
+  ) {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) throw new Error("Orden no encontrada");
+
+    this.assertValidTransition(order.status, newStatus);
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: { status: newStatus },
+    });
+
+    await prisma.orderEventLog.create({
+      data: {
+        orderId,
+        event: `ADMIN_STATUS_UPDATE_${newStatus.toUpperCase()}`,
+        fromStatus: order.status,
+        toStatus: newStatus,
+        payload: { adminId: adminId ?? null } as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    return updatedOrder;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Add Tracking Number (paid | ready_to_ship → shipped)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * Admin carga el número de seguimiento de Correo Argentino desde el dashboard.
+   * Guard: la orden DEBE estar en `paid` o `ready_to_ship`.
+   * Idempotente: si ya existe tracking, lanza 409.
+   * Dispara: transición → shipped + email al cliente.
+   */
+  async addTrackingNumber(
+    orderId: string,
+    trackingNumber: string,
+    adminId?: string
+  ) {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { lead: true, shipment: true },
+    });
+
+    if (!order) throw new Error("Orden no encontrada");
+
+    // Guard: solo paid o ready_to_ship
+    if (
+      order.status !== OrderStatus.paid &&
+      order.status !== OrderStatus.ready_to_ship
+    ) {
+      throw new Error(
+        `Solo se puede cargar seguimiento en órdenes con estado 'paid' o 'ready_to_ship'. Estado actual: ${order.status}`
+      );
+    }
+
+    // Idempotencia: no sobrescribir tracking existente
+    if (order.shipment?.trackingNumber) {
+      throw new Error(
+        `Esta orden ya tiene número de seguimiento: ${order.shipment.trackingNumber}. No se puede modificar.`
+      );
+    }
+
+    const fromStatus = order.status;
+    const now = new Date();
+
+    // Transacción atómica: Shipment + Order status + EventLog
+    let updatedOrder: Awaited<ReturnType<typeof prisma.order.update>> & { lead: { email: string; name: string | null } | null };
+    let shipment: Awaited<ReturnType<typeof prisma.shipment.upsert>>;
+
+    ({ updatedOrder, shipment } = await prisma.$transaction(async (tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">) => {
+      const upsertedShipment = await tx.shipment.upsert({
+        where: { orderId },
+        create: {
+          orderId,
+          status: ShipmentStatus.in_transit,
+          trackingNumber,
+          carrier: "correo_argentino",
+          shippedAt: now,
+          shippedByAdminId: adminId ?? null,
+        },
+        update: {
+          status: ShipmentStatus.in_transit,
+          trackingNumber,
+          shippedAt: now,
+          shippedByAdminId: adminId ?? null,
+        },
+      });
+
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: { status: OrderStatus.shipped },
+        include: { lead: { select: { email: true, name: true } } },
+      });
+
+      await tx.orderEventLog.create({
+        data: {
+          orderId,
+          event: "TRACKING_ADDED",
+          fromStatus,
+          toStatus: OrderStatus.shipped,
+          payload: {
+            trackingNumber,
+            adminId: adminId ?? null,
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      return { updatedOrder: updated, shipment: upsertedShipment };
+    }));
+
+    // Email (fuera de TX — no hace rollback si falla)
+    const leadEmail = updatedOrder.lead?.email;
+    const leadName = updatedOrder.lead?.name ?? "Cliente";
+
+    if (leadEmail) {
+      await eventDispatcher.dispatch(
+        createEvent<OrderShippedPayload>(
+          OrderEventType.ORDER_SHIPPED,
+          orderId,
+          {
+            orderId,
+            trackingNumber,
+            carrier: "Correo Argentino",
+            leadEmail,
+            leadName,
+          }
+        )
+      );
+    }
+
+    return { order: updatedOrder, shipment };
   }
 }

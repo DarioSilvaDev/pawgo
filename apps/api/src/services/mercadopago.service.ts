@@ -49,14 +49,27 @@ export class MercadoPagoService {
       throw new Error("MercadoPago no está configurado");
     }
 
+    interface MercadoPagoPreferenceItem {
+      id: string;
+      title: string;
+      description: string;
+      quantity: number;
+      unit_price: number;
+      currency_id: string;
+      picture_url?: string;
+      category_id?: string;
+    }
+
     const orderItems = (order.items as unknown) as OrderItem[];
-    const items = orderItems.map((item) => ({
+    const items: MercadoPagoPreferenceItem[] = orderItems.map((item) => ({
       id: item.productId,
-      title: `${item.productName}${item.variantName ? ` - ${item.variantName}` : ""}`,
-      description: item.size || item.variantName || item.productName,
+      title: item.productName || "Producto de Pawgo",
+      description: item.variantName || item.productName || "Producto de Pawgo",
       quantity: item.quantity,
       unit_price: item.unitPrice,
       currency_id: order.currency,
+      picture_url: item.imageUrl,
+      category_id: "animals_pet_supplies"
     }));
 
     // Add shipping cost as an item if exists
@@ -68,6 +81,20 @@ export class MercadoPagoService {
         quantity: 1,
         unit_price: order.shippingCost,
         currency_id: order.currency,
+        category_id: "shipping"
+      });
+    }
+
+    // Add discount as a negative item if exists
+    if (order.discount && order.discount > 0) {
+      items.push({
+        id: "discount",
+        title: "Descuento aplicado",
+        description: "Cupón de descuento",
+        quantity: 1,
+        unit_price: -Math.abs(order.discount), // Ensure it's negative
+        currency_id: order.currency,
+        category_id: "others"
       });
     }
 
@@ -83,21 +110,14 @@ export class MercadoPagoService {
       quantity: number;
       unit_price: number;
       currency_id: string;
+      picture_url?: string;
+      category_id?: string;
     }
 
-    const preferenceData: {
-      items: MercadoPagoPreferenceItem[];
-      payer: { email?: string };
-      back_urls: { success: string; failure: string; pending: string };
-      auto_return: "approved" | "all";
-      external_reference: string;
-      notification_url: string;
-      statement_descriptor: string;
-      metadata: { order_id: string };
-    } = {
+    const preferenceData: any = {
       items,
       payer: {
-        email: order.leadId ? undefined : undefined, // TODO: Get email from lead if available
+        email: order.payerEmail || undefined,
       },
       back_urls: {
         success: successUrl,
