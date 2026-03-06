@@ -3,7 +3,7 @@
  * Consume los endpoints del backend para provincias y ciudades
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/";
 
 export interface Provincia {
     id: string;
@@ -32,7 +32,7 @@ interface ApiResponse<T> {
  */
 export async function getProvincias(): Promise<Provincia[]> {
     try {
-        const response = await fetch(`${API_BASE_URL}/geo/provincias`, {
+        const response = await fetch(`${API_BASE_URL}/api/geo/provincias`, {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
@@ -68,7 +68,7 @@ export async function getCiudadesByProvincia(
         }
 
         const response = await fetch(
-            `${API_BASE_URL}/geo/ciudades?provinciaId=${encodeURIComponent(provinciaId)}`,
+            `${API_BASE_URL}/api/geo/ciudades?provinciaId=${encodeURIComponent(provinciaId)}`,
             {
                 method: "GET",
                 headers: {

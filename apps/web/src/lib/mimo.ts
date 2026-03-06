@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 /**
  * Gets or creates a unique fingerprint for this browser/device.
@@ -54,7 +54,7 @@ export function markAsVotedLocally(reviewId: string) {
 export async function addMimo(reviewId: string) {
     const fingerprint = getFingerprint();
 
-    const res = await fetch(`${API_URL}/reviews/${reviewId}/mimo`, {
+    const res = await fetch(`${API_URL}/api/reviews/${reviewId}/mimo`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -78,7 +78,7 @@ export async function addMimo(reviewId: string) {
  * Gets the current monthly ranking.
  */
 export async function getMonthlyRanking() {
-    const res = await fetch(`${API_URL}/reviews/ranking`);
+    const res = await fetch(`${API_URL}/api/reviews/ranking`);
     if (!res.ok) return [];
     return res.json();
 }

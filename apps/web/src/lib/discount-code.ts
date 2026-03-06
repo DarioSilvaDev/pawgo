@@ -24,7 +24,7 @@ export async function validateDiscountCode(
   code: string,
   subtotal: number
 ): Promise<DiscountCodeValidation> {
-  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"}/discount-codes/validate`, {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/discount-codes/validate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -27,7 +27,7 @@ interface Review {
 
 type Step = "gallery" | "email" | "form" | "success" | "already_reviewed" | "no_purchase";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 // ─── Star Rating Component ─────────────────────────────────────────────────────
 function StarRating({
@@ -172,7 +172,7 @@ function ComunidadPageContent() {
         setLoadingReviews(true);
         setLoadingRanking(true);
 
-        fetch(`${API_URL}/reviews?limit=12&sort=recent`)
+        fetch(`${API_URL}/api/reviews?limit=12&sort=recent`)
             .then((r) => r.json())
             .then((data) => {
                 setReviews(data.data ?? []);
@@ -250,7 +250,7 @@ function ComunidadPageContent() {
         }
         setValidatingEmail(true);
         try {
-            const res = await fetch(`${API_URL}/reviews/validate-email`, {
+            const res = await fetch(`${API_URL}/api/reviews/validate-email`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email: email.trim() }),
@@ -291,7 +291,7 @@ function ComunidadPageContent() {
             formData.append("photoConsent", String(photoConsent));
             if (imageFile) formData.append("image", imageFile);
 
-            const res = await fetch(`${API_URL}/reviews`, {
+            const res = await fetch(`${API_URL}/api/reviews`, {
                 method: "POST",
                 headers: { "x-submission-source": "qr_card" },
                 body: formData,

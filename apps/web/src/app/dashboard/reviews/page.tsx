@@ -27,8 +27,6 @@ interface Review {
     rejectedAt: string | null;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api";
-
 function StarDisplay({ value }: { value: number }) {
     return (
         <div className="flex gap-0.5">

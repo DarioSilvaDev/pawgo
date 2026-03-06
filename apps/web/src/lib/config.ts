@@ -1,14 +1,14 @@
 import { PublicConfig, CTAConfig } from "@/shared";
 import { fetchAPI } from "./auth";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 /**
  * Obtiene la configuración pública desde el backend
  */
 export async function getPublicConfig(): Promise<PublicConfig> {
     try {
-        const response = await fetch(`${API_URL}config/public`, {
+        const response = await fetch(`${API_URL}/api/config/public`, {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
