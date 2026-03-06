@@ -68,7 +68,6 @@ export function ShippingAddressForm({
   };
 
   const handleProvinceChange = (provinciaId: string | null, provinciaNombre: string | null) => {
-    console.log("📍 handleProvinceChange:", { provinciaId, provinciaNombre });
 
     const newData = {
       ...formData,
@@ -79,7 +78,6 @@ export function ShippingAddressForm({
       city: "",
     };
 
-    console.log("📍 newData after province change:", newData);
     setFormData(newData);
 
     // Clear errors de provincia y ciudad
@@ -94,12 +92,10 @@ export function ShippingAddressForm({
   };
 
   const handleCityChange = (ciudadId: string | null, ciudadNombre: string | null) => {
-    console.log("🏙️ handleCityChange:", { ciudadId, ciudadNombre });
 
     // Si ciudadId es null, es porque se está reseteando al cambiar provincia
     // En ese caso, handleProvinceChange ya manejó el reset, no hacemos nada aquí
     if (!ciudadId) {
-      console.log("🏙️ Ciudad reseteada, no hacemos nada");
       return;
     }
 
@@ -109,7 +105,6 @@ export function ShippingAddressForm({
       city: ciudadNombre || "",
     };
 
-    console.log("🏙️ newData after city change:", newData);
     setFormData(newData);
 
     // Clear error de ciudad
@@ -119,7 +114,6 @@ export function ShippingAddressForm({
 
     // Validate
     const isValid = validateForm(newData);
-    console.log("🏙️ isValid after city change:", isValid);
 
     if (isValid) {
       onAddressChange(newData);

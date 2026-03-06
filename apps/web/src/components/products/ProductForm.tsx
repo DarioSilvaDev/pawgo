@@ -109,7 +109,6 @@ export function ProductForm({ productId }: ProductFormProps) {
       };
 
       if (productId) {
-        console.log("Actualizando producto con datos:", data);
         await updateProduct(productId, data as UpdateProductDto);
         showToast({
           type: "success",
@@ -128,7 +127,6 @@ export function ProductForm({ productId }: ProductFormProps) {
         }, 1500);
       }
     } catch (err) {
-      console.error("Error al guardar producto:", err);
       const errorMessage =
         err instanceof Error
           ? err.message
@@ -144,34 +142,22 @@ export function ProductForm({ productId }: ProductFormProps) {
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, productId: string) => {
-    console.log("🖼️ [ProductForm] Iniciando carga de imágenes");
-    console.log("📦 [ProductForm] productId:", productId || "undefined (producto nuevo)");
-
     const files = e.target.files;
     if (!files || files.length === 0) {
-      console.warn("⚠️ [ProductForm] No se seleccionaron archivos");
       return;
     }
-
-    console.log(`📁 [ProductForm] Archivos seleccionados: ${files.length}`);
 
     const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
     const maxSize = 10 * 1024 * 1024; // 10MB
 
     try {
       setUploadingImages(true);
-      console.log("⏳ [ProductForm] Estado de carga activado");
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        console.log(`\n📄 [ProductForm] Procesando archivo ${i + 1}/${files.length}:`);
-        console.log("  - Nombre:", file.name);
-        console.log("  - Tipo:", file.type);
-        console.log("  - Tamaño:", `${(file.size / 1024 / 1024).toFixed(2)} MB`);
 
         // Validar tipo de archivo
         if (!allowedTypes.includes(file.type)) {
-          console.error(`❌ [ProductForm] Tipo de archivo inválido: ${file.type}`);
           showToast({
             type: "error",
             message: `El archivo ${file.name} no es válido. Solo se permiten PNG, JPG, JPEG o WEBP.`,
@@ -179,11 +165,9 @@ export function ProductForm({ productId }: ProductFormProps) {
           });
           continue;
         }
-        console.log("✅ [ProductForm] Tipo de archivo válido");
 
         // Validar tamaño
         if (file.size > maxSize) {
-          console.error(`❌ [ProductForm] Archivo demasiado grande: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
           showToast({
             type: "error",
             message: `El archivo ${file.name} es demasiado grande. Tamaño máximo: 10MB.`,
@@ -191,41 +175,27 @@ export function ProductForm({ productId }: ProductFormProps) {
           });
           continue;
         }
-        console.log("✅ [ProductForm] Tamaño de archivo válido");
 
         // Subir imagen (pasar productId solo si existe, para productos nuevos será undefined)
-        console.log("🚀 [ProductForm] Iniciando subida al servidor...");
         const startTime = Date.now();
 
         const result = await uploadProductImage(file, productId || undefined);
-        console.log("🚀 ~ handleImageUpload ~ result:", result)
         if (result.success) {
           const url = await downloadImage(result.key)
-          console.log("🚀 ~ handleImageUpload ~ url:", url)
           const uploadTime = Date.now() - startTime;
-          console.log(`✅ [ProductForm] Imagen subida exitosamente en ${uploadTime}ms`);
-          console.log("  - URL:", url);
-          console.log("  - Filename:", result.filename);
 
           // Agregar URL a la lista de imágenes si no existe
           if (!formData.images.includes(url)) {
-            console.log("➕ [ProductForm] Agregando URL a la lista de imágenes");
             setFormData({
               ...formData,
               images: [...formData.images, url],
             });
-            console.log(`📋 [ProductForm] Total de imágenes: ${formData.images.length + 1}`);
           } else {
-            console.log("⚠️ [ProductForm] La URL ya existe en la lista, no se agrega");
+            console.log("⚠️ [ProductForm] La URL ya existe");
           }
         }
       }
-
-      console.log("✅ [ProductForm] Proceso de carga completado");
     } catch (err) {
-      console.error("❌ [ProductForm] Error al subir imagen:", err);
-      console.error("  - Tipo:", err instanceof Error ? err.constructor.name : typeof err);
-      console.error("  - Mensaje:", err instanceof Error ? err.message : String(err));
       showToast({
         type: "error",
         message:
@@ -236,7 +206,6 @@ export function ProductForm({ productId }: ProductFormProps) {
       });
     } finally {
       setUploadingImages(false);
-      console.log("🔄 [ProductForm] Estado de carga desactivado");
       // Limpiar el input para permitir seleccionar el mismo archivo nuevamente
       e.target.value = "";
     }
