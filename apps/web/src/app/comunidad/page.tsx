@@ -717,8 +717,8 @@ function ComunidadPageContent() {
                             <h2 className="text-4xl md:text-5xl font-black text-gray-900 leading-tight mb-4">
                                 {ranking[0].petName} <span className="text-teal-500 text-3xl">🐾💚</span>
                             </h2>
-                            <p className="text-lg text-gray-600 mb-8 max-w-xl">
-                                "{ranking[0].comment?.length > 120 ? ranking[0].comment.slice(0, 120) + "..." : ranking[0].comment}"
+                            <p className="text-lg text-gray-600 mb-8 max-w-xl italic">
+                                &quot;{ranking[0].comment?.length > 120 ? ranking[0].comment.slice(0, 120) + "..." : ranking[0].comment}&quot;
                             </p>
                             <div className="flex flex-col sm:flex-row items-center gap-4">
                                 <div className="flex items-center gap-2 bg-white px-5 py-3 rounded-2xl shadow-sm border border-amber-100">
