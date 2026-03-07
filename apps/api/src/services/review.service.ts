@@ -4,7 +4,7 @@ import { EmailService } from "./email.service.js";
 import { MimoService } from "./mimo.service.js";
 import { ImageValidationService } from "./image-validation.service.js";
 import { ImageProcessingService } from "./image-processing.service.js";
-import { Prisma } from "@prisma/client";
+import { OrderStatus, Prisma } from "@prisma/client";
 
 export interface ValidateEmailResult {
     canReview: boolean;
@@ -72,11 +72,11 @@ export class ReviewService {
             return { canReview: false, reason: "no_purchase_found" };
         }
 
-        // 2. Find all "paid" orders for this lead, including their review status
+        // 2. Find all "shipped" orders for this lead, including their review status
         const orders = await prisma.order.findMany({
             where: {
                 leadId: lead.id,
-                status: "paid",
+                status: OrderStatus.shipped,
             },
             select: {
                 id: true,
@@ -95,7 +95,7 @@ export class ReviewService {
         const orderWithoutReview = orders.find((o) => !o.review);
 
         if (!orderWithoutReview) {
-            // All paid orders already have reviews
+            // All shipped orders already have reviews
             // We return the status of the most recent review for context
             return {
                 canReview: false,
@@ -118,7 +118,7 @@ export class ReviewService {
         const order = await prisma.order.findFirst({
             where: {
                 id: dto.orderId,
-                status: "paid",
+                status: OrderStatus.shipped,
                 lead: {
                     email: normalizedEmail,
                 },
