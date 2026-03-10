@@ -16,6 +16,11 @@ import { influencerPaymentRoutes } from "./routes/influencer-payment.routes.js";
 import { uploadRoutes } from "./routes/upload.routes.js";
 import { analyticsRoutes } from "./routes/analytics.routes.js";
 import { productRoutes } from "./routes/product.routes.js";
+import { ProductService } from "./services/product.service.js";
+import { ProductController } from "./controllers/product.controller.js";
+import { stockReservationRoutes } from "./routes/stock-reservation.routes.js";
+import { StockReservationService } from "./services/stock-reservation.service.js";
+import { StockReservationController } from "./controllers/stock-reservation.controller.js";
 import { geoRoutes } from "./routes/geo.routes.js";
 import { configRoutes } from "./routes/config.routes.js";
 import { miCorreoRoutes } from "./routes/micorreo/index.js";
@@ -23,6 +28,7 @@ import { leadNotificationRoutes } from "./routes/lead-notification.routes.js";
 import { reviewRoutes } from "./routes/review.routes.js";
 import { registerReviewReminderWorker } from "./jobs/review-reminder.job.js";
 import { registerMonthlyWinnerWorker, scheduleMonthlyWinnerJob } from "./jobs/monthly-winner.job.js";
+import { registerStockReplenishmentWorker } from "./jobs/stock-reservation.job.js";
 import { TokenService } from "./auth/services/token.service.js";
 import { AuthService } from "./auth/services/auth.service.js";
 import { DiscountCodeService } from "./services/discount-code.service.js";
@@ -86,28 +92,6 @@ await fastify.register(multipart, {
   },
 });
 
-// Initialize services
-const tokenService = new TokenService(fastify);
-const authService = new AuthService(tokenService);
-const leadService = new LeadService();
-const discountCodeService = new DiscountCodeService();
-const commissionService = new CommissionService();
-const miCorreoService = new MiCorreoService();
-const orderService = new OrderService(discountCodeService, commissionService, miCorreoService);
-const mercadoPagoService = new MercadoPagoService();
-const storageService = new StorageService();
-const influencerPaymentService = new InfluencerPaymentService(storageService);
-const analyticsService = new AnalyticsService();
-
-const leadController = new LeadController(leadService);
-const uploadController = new UploadController(
-  storageService,
-  influencerPaymentService
-);
-
-// Domain events are now bootstrapped after pg-boss starts
-// bootstrapOrderEvents();
-
 // Initialize pg-boss for background jobs
 const boss = new PgBoss({
   connectionString: process.env.DATABASE_URL!,
@@ -121,9 +105,36 @@ boss.on("error", (err) => {
 await boss.start();
 console.log("[api] pg-boss started");
 
+// Initialize services
+const tokenService = new TokenService(fastify);
+const authService = new AuthService(tokenService);
+const leadService = new LeadService();
+const discountCodeService = new DiscountCodeService();
+const commissionService = new CommissionService();
+const miCorreoService = new MiCorreoService();
+const orderService = new OrderService(discountCodeService, commissionService, miCorreoService);
+const mercadoPagoService = new MercadoPagoService();
+const storageService = new StorageService();
+const stockReservationService = new StockReservationService(boss);
+const productService = new ProductService(storageService, stockReservationService);
+const influencerPaymentService = new InfluencerPaymentService(storageService);
+const analyticsService = new AnalyticsService();
+
+const leadController = new LeadController(leadService);
+const productController = new ProductController(productService);
+const stockReservationController = new StockReservationController(stockReservationService);
+const uploadController = new UploadController(
+  storageService,
+  influencerPaymentService
+);
+
+// Domain events are now bootstrapped after pg-boss starts
+// bootstrapOrderEvents();
+
 // Register background job workers
 await registerReviewReminderWorker(boss);
 await registerMonthlyWinnerWorker(boss);
+await registerStockReplenishmentWorker(boss);
 await scheduleMonthlyWinnerJob(boss);
 
 // Bootstrap domain event handlers with boss access
@@ -200,7 +211,12 @@ await fastify.register(analyticsRoutes, {
 });
 await fastify.register(productRoutes, {
   prefix: "/api",
+  productController,
   tokenService,
+});
+await fastify.register(stockReservationRoutes, {
+  prefix: "/api",
+  stockReservationController,
 });
 await fastify.register(geoRoutes, {
   prefix: "/api",

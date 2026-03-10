@@ -1,10 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { ProductService } from "../services/product.service.js";
-import { StorageService } from "../services/storage.service.js";
-// import { JwtPayload } from "../shared/index.js";
-
-const productService = new ProductService(new StorageService());
 
 const createProductSchema = z.object({
   name: z.string().min(1, "El nombre es requerido"),
@@ -66,12 +62,14 @@ const updateVariantSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-export const productController = {
+export class ProductController {
+  constructor(private readonly productService: ProductService) { }
+
   /**
    * Get all products
    * GET /api/products
    */
-  async getAll(request: FastifyRequest, reply: FastifyReply) {
+  getAll = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as {
         isActive?: string;
@@ -91,7 +89,7 @@ export const productController = {
         filters.search = query.search;
       }
 
-      const products = await productService.getAll(filters);
+      const products = await this.productService.getAll(filters);
       reply.send({ products });
     } catch (error) {
       if (error instanceof Error) {
@@ -102,16 +100,16 @@ export const productController = {
       }
       throw error;
     }
-  },
+  };
 
   /**
    * Get product by ID
    * GET /api/products/:id
    */
-  async getById(request: FastifyRequest, reply: FastifyReply) {
+  getById = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
-      const product = await productService.getById(id);
+      const product = await this.productService.getById(id);
 
       if (!product) {
         reply.status(404).send({
@@ -130,16 +128,16 @@ export const productController = {
       }
       throw error;
     }
-  },
+  };
 
   /**
    * Create product
    * POST /api/products
    */
-  async create(request: FastifyRequest, reply: FastifyReply) {
+  create = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = createProductSchema.parse(request.body);
-      const product = await productService.create(body);
+      const product = await this.productService.create(body);
 
       reply.status(201).send(product);
     } catch (error) {
@@ -159,17 +157,17 @@ export const productController = {
       }
       throw error;
     }
-  },
+  };
 
   /**
    * Update product
    * PATCH /api/products/:id
    */
-  async update(request: FastifyRequest, reply: FastifyReply) {
+  update = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
       const body = updateProductSchema.parse(request.body);
-      const product = await productService.update(id, body);
+      const product = await this.productService.update(id, body);
 
       reply.send(product);
     } catch (error) {
@@ -189,16 +187,16 @@ export const productController = {
       }
       throw error;
     }
-  },
+  };
 
   /**
    * Delete product (soft delete)
    * DELETE /api/products/:id
    */
-  async delete(request: FastifyRequest, reply: FastifyReply) {
+  delete = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
-      await productService.delete(id);
+      await this.productService.delete(id);
 
       reply.status(204).send();
     } catch (error) {
@@ -210,17 +208,17 @@ export const productController = {
       }
       throw error;
     }
-  },
+  };
 
   /**
    * Create product variant
    * POST /api/products/:productId/variants
    */
-  async createVariant(request: FastifyRequest, reply: FastifyReply) {
+  createVariant = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { productId } = request.params as { productId: string };
       const body = createVariantSchema.parse(request.body);
-      const variant = await productService.createVariant(productId, body);
+      const variant = await this.productService.createVariant(productId, body);
 
       reply.status(201).send(variant);
     } catch (error) {
@@ -240,17 +238,17 @@ export const productController = {
       }
       throw error;
     }
-  },
+  };
 
   /**
    * Update product variant
    * PATCH /api/products/variants/:variantId
    */
-  async updateVariant(request: FastifyRequest, reply: FastifyReply) {
+  updateVariant = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { variantId } = request.params as { variantId: string };
       const body = updateVariantSchema.parse(request.body);
-      const variant = await productService.updateVariant(variantId, body);
+      const variant = await this.productService.updateVariant(variantId, body);
 
       reply.send(variant);
     } catch (error) {
@@ -270,16 +268,16 @@ export const productController = {
       }
       throw error;
     }
-  },
+  };
 
   /**
    * Delete product variant
    * DELETE /api/products/variants/:variantId
    */
-  async deleteVariant(request: FastifyRequest, reply: FastifyReply) {
+  deleteVariant = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { variantId } = request.params as { variantId: string };
-      await productService.deleteVariant(variantId);
+      await this.productService.deleteVariant(variantId);
 
       reply.status(204).send();
     } catch (error) {
@@ -291,5 +289,5 @@ export const productController = {
       }
       throw error;
     }
-  },
-};
+  };
+}

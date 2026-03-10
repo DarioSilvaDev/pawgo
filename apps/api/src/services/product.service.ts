@@ -1,8 +1,8 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { prisma } from "../config/prisma.client.js";
 import { StorageService } from "./storage.service.js";
+import { StockReservationService } from "./stock-reservation.service.js";
 import { envs } from "../config/envs.js";
-
-const prisma = new PrismaClient();
 
 export interface CreateProductDto {
   name: string;
@@ -47,7 +47,10 @@ export class ProductService {
   /**
    * Get all products
    */
-  constructor(private readonly storageService: StorageService) { }
+  constructor(
+    private readonly storageService: StorageService,
+    private readonly stockReservationService: StockReservationService
+  ) { }
 
   private extractStorageKey(value: string): string | null {
     if (!value) return null;
@@ -297,7 +300,7 @@ export class ProductService {
       throw new Error("Producto no encontrado");
     }
 
-    return prisma.productVariant.create({
+    const variant = await prisma.productVariant.create({
       data: {
         productId,
         name: data.name,
@@ -308,6 +311,15 @@ export class ProductService {
         isActive: data.isActive !== undefined ? data.isActive : true,
       },
     });
+
+    // If initial stock is > 0, trigger replenishment check
+    if (variant.stock && variant.stock > 0) {
+      this.stockReservationService.processReplenishment(variant.id).catch(err => {
+        console.error(`[ProductService] Error processing replenishment for variant ${variant.id}:`, err);
+      });
+    }
+
+    return variant;
   }
 
   /**
@@ -319,7 +331,14 @@ export class ProductService {
       throw new Error("El precio de la variante debe ser mayor a 0");
     }
 
-    return prisma.productVariant.update({
+    // Get current stock to check if it's a replenishment (from 0 to > 0)
+    const currentVariant = await prisma.productVariant.findUnique({
+      where: { id: variantId },
+      select: { stock: true }
+    });
+    console.log("🚀 ~ ProductService ~ updateVariant ~ currentVariant:", currentVariant)
+
+    const updatedVariant = await prisma.productVariant.update({
       where: { id: variantId },
       data: {
         name: data.name,
@@ -330,6 +349,19 @@ export class ProductService {
         isActive: data.isActive,
       },
     });
+    console.log("🚀 ~ ProductService ~ updateVariant ~ updatedVariant:", updatedVariant)
+
+    // Trigger replenishment if stock went from 0 (or null) to > 0
+    const oldStock = currentVariant?.stock ?? 0;
+    const newStock = updatedVariant.stock ?? 0;
+
+    if (oldStock === 0 && newStock > 0) {
+      this.stockReservationService.processReplenishment(variantId).catch(err => {
+        console.error(`[ProductService] Error processing replenishment for variant ${variantId}:`, err);
+      });
+    }
+
+    return updatedVariant;
   }
 
   /**

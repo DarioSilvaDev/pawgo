@@ -1,0 +1,95 @@
+import { prisma } from "../config/prisma.client.js";
+import { CreateStockReservationDto } from "../shared/index.js";
+import { PgBoss } from "pg-boss";
+import { JOB_STOCK_REPLENISHMENT } from "../jobs/stock-reservation.job.js";
+
+export class StockReservationService {
+    constructor(private readonly boss: PgBoss) { }
+
+    async create(data: CreateStockReservationDto) {
+        const { email, name, phoneNumber, items } = data;
+
+        // 1. Find or create Lead (Reuse existing lead by email)
+        const lead = await prisma.lead.findFirst({
+            where: { email }
+        });
+
+        const leadId = lead ? lead.id : (await prisma.lead.create({
+            data: {
+                email,
+                name: name || undefined,
+                phoneNumber: phoneNumber || undefined
+            }
+        })).id;
+
+        // If lead exists but phone/name is missing, update them
+        if (lead && (phoneNumber || name)) {
+            await prisma.lead.update({
+                where: { id: lead.id },
+                data: {
+                    phoneNumber: phoneNumber || lead.phoneNumber,
+                    name: name || lead.name
+                }
+            });
+        }
+
+        // 2. Create reservations for each variant
+        const results = [];
+        for (const item of items) {
+            // Check for existing active reservation (notifiedAt is null)
+            const existing = await prisma.stockReservation.findFirst({
+                where: {
+                    leadId,
+                    variantId: item.variantId,
+                    notifiedAt: null
+                }
+            });
+
+            if (existing) {
+                // If same quantity, throw error (as user requested)
+                if (existing.desiredQuantity === item.quantity) {
+                    throw new Error("Ya tienes una reserva para este producto por esa cantidad.");
+                }
+
+                // If different quantity, update it
+                const updated = await prisma.stockReservation.update({
+                    where: { id: existing.id },
+                    data: { desiredQuantity: item.quantity }
+                });
+                results.push(updated);
+            } else {
+                // Create new reservation
+                const created = await prisma.stockReservation.create({
+                    data: {
+                        leadId,
+                        variantId: item.variantId,
+                        desiredQuantity: item.quantity
+                    }
+                });
+                results.push(created);
+            }
+        }
+
+        return { leadId, count: results.length };
+    }
+
+    async processReplenishment(variantId: string) {
+        // Find all pending reservations for this variant
+        const pending = await prisma.stockReservation.findMany({
+            where: {
+                variantId,
+                notifiedAt: null
+            },
+            select: { id: true }
+        });
+
+        if (pending.length === 0) return;
+
+        // Queue notification jobs
+        for (const reservation of pending) {
+            await this.boss.send(JOB_STOCK_REPLENISHMENT, { reservationId: reservation.id });
+        }
+
+        console.log(`🚀 Queued ${pending.length} replenishment notifications for variant ${variantId}`);
+    }
+}

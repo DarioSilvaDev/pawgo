@@ -638,20 +638,13 @@ export class EmailService {
     email: string,
     discountCode: string,
     name?: string,
-    dogSize?: string
+    productName?: string,
+    variantName?: string
   ): Promise<void> {
     const shopUrl = `${FRONTEND_URL}/shop`;
     const expirationDate = new Date();
     expirationDate.setHours(expirationDate.getHours() + 24);
 
-    const dogSizeText = dogSize
-      ? {
-        small: "pequeño",
-        medium: "mediano",
-        large: "grande",
-        extra_large: "extra grande",
-      }[dogSize] || ""
-      : "";
 
     const html = `
       <!DOCTYPE html>
@@ -681,10 +674,7 @@ export class EmailService {
               <div class="success-box">
                 <p style="margin: 0;"><strong>¡Tenemos excelentes noticias! Los productos que esperabas ya están disponibles.</strong></p>
               </div>
-              <p>Nos complace informarte que nuestros productos ${dogSizeText
-        ? `para perros de tamaño <strong>${dogSizeText}</strong> `
-        : ""
-      }ya están listos para ti.</p>
+              <p>Nos complace informarte que ya tenemos stock disponible de: <strong>${productName} ${variantName ? `(${variantName})` : ""}</strong>.</p>
               <div class="code-box">
                 <p style="margin: 0 0 10px 0;"><strong>🎁 Tu código de descuento exclusivo</strong></p>
                 <p class="discount-code">${discountCode}</p>
@@ -693,15 +683,15 @@ export class EmailService {
               <div class="warning-box">
                 <p style="margin: 0;"><strong>⏰ Válido por 24 horas</strong></p>
                 <p style="margin: 5px 0 0 0;">Tu código y reserva son válidos hasta el <strong>${expirationDate.toLocaleDateString(
-        "es-AR",
-        {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        }
-      )}</strong>. ¡No te lo pierdas!</p>
+      "es-AR",
+      {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    )}</strong>. ¡No te lo pierdas!</p>
               </div>
               <div style="text-align: center;">
                 <a href="${shopUrl}" class="button">Comprar Ahora 🛒</a>

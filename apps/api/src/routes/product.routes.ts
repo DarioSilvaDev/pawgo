@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { productController } from "../controllers/product.controller.js";
+import { ProductController } from "../controllers/product.controller.js";
 import {
   createAuthMiddleware,
   requireRole,
@@ -9,9 +9,9 @@ import { UserRole } from "../shared/index.js";
 
 export async function productRoutes(
   fastify: FastifyInstance,
-  options: { tokenService: TokenService }
+  options: { tokenService: TokenService; productController: ProductController }
 ) {
-  const { tokenService } = options;
+  const { tokenService, productController } = options;
   const authenticate = createAuthMiddleware(tokenService);
   const requireAdmin = requireRole(UserRole.ADMIN);
 
@@ -33,7 +33,7 @@ export async function productRoutes(
       "/products/:productId/variants",
       productController.createVariant
     );
-    fastify.patch(
+    fastify.put(
       "/products/variants/:variantId",
       productController.updateVariant
     );
