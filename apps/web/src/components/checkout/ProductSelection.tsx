@@ -16,12 +16,14 @@ interface ProductSelectionProps {
     variantId: string,
     quantity: number
   ) => void;
+  onBackInStockRequest?: (product: Product) => void;
 }
 
 export function ProductSelection({
   products,
   selectedProducts,
   onSelectProduct,
+  onBackInStockRequest,
 }: ProductSelectionProps) {
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
 
@@ -190,8 +192,11 @@ export function ProductSelection({
                         <button
                           key={variant.id}
                           type="button"
-                          disabled={isOutOfStock}
                           onClick={() => {
+                            if (isOutOfStock) {
+                              if (onBackInStockRequest) onBackInStockRequest(product);
+                              return;
+                            }
                             onSelectProduct(
                               product.id,
                               variant.id,
@@ -204,14 +209,21 @@ export function ProductSelection({
                               ? "border-primary-turquoise bg-primary-turquoise/5"
                               : "border-gray-100 hover:border-gray-200 bg-gray-50/50"
                             }
-                            ${isOutOfStock ? "opacity-40 cursor-not-allowed grayscale" : "cursor-pointer"}
+                            ${isOutOfStock ? "border-amber-200 bg-amber-50/30 cursor-pointer" : "cursor-pointer"}
                           `}
                         >
-                          <span className={`text-sm font-semibold ${isSelected ? "text-primary-turquoise" : "text-text-black"}`}>
+                          <span className={`text-sm font-semibold ${isSelected ? "text-primary-turquoise" : (isOutOfStock ? "text-amber-700" : "text-text-black")}`}>
                             {variant.name}
                           </span>
                           {variant.size && (
                             <span className="text-[10px] text-text-dark-gray">{variant.size}</span>
+                          )}
+
+                          {/* Out of stock indicator */}
+                          {isOutOfStock && (
+                            <span className="text-[9px] font-bold text-amber-600 mt-0.5">
+                              Avisame! 🔔
+                            </span>
                           )}
 
                           {/* Stock indicator dots */}

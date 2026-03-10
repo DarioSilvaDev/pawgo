@@ -12,6 +12,7 @@ import { ShippingAddressForm, ShippingAddress } from "@/components/checkout/Ship
 import { CustomerInfoForm } from "@/components/checkout/CustomerInfoForm";
 import { CustomerInfo } from "@/lib/order";
 import { getEffectivePrice } from "@/lib/pricing";
+import { BuyIntentModal } from "@/components/modals/BuyIntentModal";
 
 const STEPS = ["Seleccionar Producto", "Aplicar Descuento", "Datos del Cliente", "Datos de Envío", "Confirmar Compra"];
 
@@ -32,6 +33,13 @@ export default function CheckoutPage() {
   const [shippingAddress, setShippingAddress] = useState<ShippingAddress | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showStockModal, setShowStockModal] = useState(false);
+  const [selectedProductForModal, setSelectedProductForModal] = useState<Product | undefined>();
+
+  const handleBackInStockRequest = (product: Product) => {
+    setSelectedProductForModal(product);
+    setShowStockModal(true);
+  };
 
   // Reset processing state when component mounts (e.g., user navigates back)
   useEffect(() => {
@@ -274,9 +282,18 @@ export default function CheckoutPage() {
                     products={products}
                     selectedProducts={selectedProducts}
                     onSelectProduct={handleSelectProduct}
+                    onBackInStockRequest={handleBackInStockRequest}
                   />
                 </div>
               </div>
+            )}
+
+            {showStockModal && (
+              <BuyIntentModal
+                onClose={() => setShowStockModal(false)}
+                mode="WAITLIST"
+                product={selectedProductForModal}
+              />
             )}
 
             {/* Step 2: Discount Code */}
