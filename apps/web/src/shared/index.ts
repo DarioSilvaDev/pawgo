@@ -13,3 +13,4 @@ export * from './types/discount-code';
 export * from './types/event';
 export * from './types/influencer-payment';
 export * from './types/lead';
+export * from './types/stock-reservation';

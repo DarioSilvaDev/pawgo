@@ -11,3 +11,4 @@ export * from './types/event.js';
 export * from './types/influencer-payment.js';
 export * from './types/lead.js';
 export * from './types/order.js';
+export * from './types/stock-reservation.js';
