@@ -34,6 +34,17 @@ export async function registerLeadNotificationWorker(boss: PgBoss) {
                 try {
                     const lead = await prisma.lead.findUnique({
                         where: { id: leadId },
+                        include: {
+                            stockReservations: {
+                                where: { notifiedAt: null },
+                                take: 1,
+                                include: {
+                                    variant: {
+                                        include: { product: true },
+                                    },
+                                },
+                            },
+                        },
                     });
 
                     if (!lead) {
@@ -44,12 +55,18 @@ export async function registerLeadNotificationWorker(boss: PgBoss) {
                     // Generate unique discount code for this lead using unified service
                     const discountCode = await discountCodeService.createLeadReservationCode(leadId);
 
+                    // Resolve product/variant from the lead's pending stock reservations
+                    const reservation = lead.stockReservations[0];
+                    const productName = reservation?.variant.product.name;
+                    const variantName = reservation?.variant.name;
+
                     // Send email with discount code
                     await emailService.sendProductAvailabilityNotification(
                         lead.email,
                         discountCode.code,
                         lead.name || undefined,
-                        lead.dogSize || undefined
+                        productName,
+                        variantName,
                     );
 
                     // Update lead notification tracking

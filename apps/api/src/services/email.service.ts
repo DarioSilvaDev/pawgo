@@ -641,7 +641,7 @@ export class EmailService {
     productName?: string,
     variantName?: string
   ): Promise<void> {
-    const shopUrl = `${FRONTEND_URL}/shop`;
+    const shopUrl = `${FRONTEND_URL}/checkout`;
     const expirationDate = new Date();
     expirationDate.setHours(expirationDate.getHours() + 24);
 
@@ -1349,7 +1349,7 @@ export class EmailService {
     reviewImageUrl: string;
   }): Promise<void> {
     const { email, petName, couponCode, monthName, reviewImageUrl } = params;
-    const shopUrl = `${FRONTEND_URL}/shop`;
+    const shopUrl = `${FRONTEND_URL}/checkout`;
 
     const html = `
       <!DOCTYPE html>
