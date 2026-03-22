@@ -29,6 +29,9 @@ import { reviewRoutes } from "./routes/review.routes.js";
 import { registerReviewReminderWorker } from "./jobs/review-reminder.job.js";
 import { registerMonthlyWinnerWorker, scheduleMonthlyWinnerJob } from "./jobs/monthly-winner.job.js";
 import { registerStockReplenishmentWorker } from "./jobs/stock-reservation.job.js";
+import { registerLeadNotificationWorker } from "./jobs/lead-notification.job.js";
+import { registerDiscountCodeExpirationScan } from "./jobs/discount-code-expiration.scan.js";
+import { registerDiscountCodeSettlementWorker } from "./jobs/discount-code-expiration.settle.js";
 import { TokenService } from "./auth/services/token.service.js";
 import { AuthService } from "./auth/services/auth.service.js";
 import { DiscountCodeService } from "./services/discount-code.service.js";
@@ -135,6 +138,9 @@ const uploadController = new UploadController(
 await registerReviewReminderWorker(boss);
 await registerMonthlyWinnerWorker(boss);
 await registerStockReplenishmentWorker(boss);
+await registerLeadNotificationWorker(boss);
+await registerDiscountCodeExpirationScan(boss);
+await registerDiscountCodeSettlementWorker(boss);
 await scheduleMonthlyWinnerJob(boss);
 
 // Bootstrap domain event handlers with boss access
@@ -262,7 +268,6 @@ const start = async () => {
   try {
     const port = envs.PORT;
     const host = envs.HOST;
-
     await fastify.listen({ port, host });
     console.info(`🚀 Server running`);
   } catch (err) {
