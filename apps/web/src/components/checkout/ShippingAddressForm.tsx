@@ -6,11 +6,14 @@ import ProvinceCitySelect from "@/components/ProvinceCitySelect";
 export interface ShippingAddress {
   street: string;
   city: string;
-  cityId?: string; // ID de la ciudad desde GeorefAR
+  cityId?: string;      // ID de la ciudad desde GeorefAR
   state: string;
-  stateId?: string; // ID de la provincia desde GeorefAR
+  stateId?: string;     // ID de la provincia desde GeorefAR
   zipCode: string;
   country: string;
+  floor?: string;       // Piso (opcional, para departamentos)
+  apartment?: string;   // Departamento / Unidad (opcional)
+  addressNotes?: string; // Observaciones de entrega (opcional)
 }
 
 interface ShippingAddressFormProps {
@@ -30,6 +33,9 @@ export function ShippingAddressForm({
     stateId: initialAddress?.stateId,
     zipCode: initialAddress?.zipCode || "",
     country: initialAddress?.country || "Argentina",
+    floor: initialAddress?.floor || "",
+    apartment: initialAddress?.apartment || "",
+    addressNotes: initialAddress?.addressNotes || "",
   });
 
   const [errors, setErrors] = useState<
@@ -193,6 +199,36 @@ export function ShippingAddressForm({
           )}
         </div>
 
+        {/* Piso y Departamento en fila */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Piso <span className="text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <input
+              type="text"
+              value={formData.floor}
+              onChange={(e) => handleChange("floor", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-turquoise focus:border-transparent"
+              placeholder="Ej: 3"
+              maxLength={10}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Departamento <span className="text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <input
+              type="text"
+              value={formData.apartment}
+              onChange={(e) => handleChange("apartment", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-turquoise focus:border-transparent"
+              placeholder="Ej: B"
+              maxLength={10}
+            />
+          </div>
+        </div>
+
         {/* Código Postal y País en fila */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -219,6 +255,25 @@ export function ShippingAddressForm({
             )}
           </div>
 
+        </div>
+
+        {/* Observaciones de entrega */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Observaciones de entrega{" "}
+            <span className="text-gray-400 font-normal">(opcional)</span>
+          </label>
+          <textarea
+            value={formData.addressNotes}
+            onChange={(e) => handleChange("addressNotes", e.target.value)}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-turquoise focus:border-transparent resize-none"
+            placeholder="Ej: timbre no funciona, tocar puerta · casa de color amarillo · portón negro · dejar con el vecino del 2B..."
+            maxLength={300}
+          />
+          <p className="mt-1 text-xs text-gray-400 text-right">
+            {(formData.addressNotes || "").length}/300
+          </p>
         </div>
 
         {/* Mensaje de próximamente para otros códigos postales */}

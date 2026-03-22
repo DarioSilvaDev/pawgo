@@ -24,6 +24,9 @@ export interface CreateOrderDto {
     state: string;
     zipCode: string;
     country: string;
+    floor?: string;        // Piso (opcional)
+    apartment?: string;    // Departamento (opcional)
+    addressNotes?: string; // Observaciones de entrega (opcional)
   };
   shippingMethod?: string;
   discountCode?: string;

@@ -369,6 +369,8 @@ export default function CheckoutPage() {
                         <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
                           <p className="text-text-dark-gray">
                             <span className="font-medium">Dirección:</span> {shippingAddress.street}
+                            {shippingAddress.floor && `, Piso ${shippingAddress.floor}`}
+                            {shippingAddress.apartment && ` Dpto. ${shippingAddress.apartment}`}
                           </p>
                           <p className="text-text-dark-gray">
                             <span className="font-medium">Ciudad:</span> {shippingAddress.city}
@@ -382,6 +384,11 @@ export default function CheckoutPage() {
                           <p className="text-text-dark-gray">
                             <span className="font-medium">País:</span> {shippingAddress.country}
                           </p>
+                          {shippingAddress.addressNotes && (
+                            <p className="text-text-dark-gray pt-1 border-t border-gray-200 mt-1">
+                              <span className="font-medium">Observaciones:</span> {shippingAddress.addressNotes}
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}

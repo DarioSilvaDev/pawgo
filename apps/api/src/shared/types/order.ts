@@ -38,6 +38,9 @@ export interface Address {
     state: string;
     zipCode: string;
     country: string;
+    floor?: string;       // Piso (opcional, para departamentos)
+    apartment?: string;   // Departamento (opcional)
+    addressNotes?: string; // Observaciones de entrega (opcional)
 }
 
 export interface CustomerInfo {
