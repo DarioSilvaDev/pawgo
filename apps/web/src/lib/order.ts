@@ -48,6 +48,8 @@ export interface Lead {
   id: string;
   email: string;
   name?: string;
+  lastName?: string;
+  phoneNumber?: string;
   dogSize?: string;
   createdAt: Date;
 }

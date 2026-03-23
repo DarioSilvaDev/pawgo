@@ -16,6 +16,17 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-red-100 text-red-800",
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  awaiting_payment: "Esperando pago",
+  pending: "Pendiente",
+  paid: "Pago confirmado",
+  ready_to_ship: "Preparado",
+  shipped: "Enviado",
+  delivered: "Entregado",
+  cancelled: "Cancelado",
+  refunded: "Reembolsado",
+};
+
 export default function OrdersPage() {
   const { user, isAdmin } = useAuth();
   const router = useRouter();
@@ -91,6 +102,74 @@ export default function OrdersPage() {
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
+  // ── CSV Export ─────────────────────────────────────────────────────────────
+  const exportToCSV = () => {
+    const headers = [
+      "ID Orden",
+      "Fecha",
+      "Estado",
+      "Nombre",
+      "Apellido",
+      "Email",
+      "Teléfono",
+      "Calle y Número",
+      "Piso",
+      "Departamento",
+      "Ciudad",
+      "Provincia",
+      "Código Postal",
+      "Observaciones entrega",
+      "Total (ARS)",
+    ];
+
+    const escape = (val: unknown) => {
+      const str = val == null ? "" : String(val);
+      // Wrap in quotes if it contains commas, quotes or newlines
+      return str.includes(",") || str.includes('"') || str.includes("\n")
+        ? `"${str.replace(/"/g, '""')}"`
+        : str;
+    };
+
+    const rows = orders.map((order) => {
+      const addr = order.shippingAddress as Record<string, string> | null;
+      return [
+        escape(order.id),
+        escape(formatDate(order.createdAt)),
+        escape(STATUS_LABELS[order.status] ?? order.status),
+        escape(order.lead?.name ?? ""),
+        escape(order.lead?.lastName ?? ""),
+        escape(order.lead?.email ?? ""),
+        escape(order.lead?.phoneNumber ?? ""),
+        escape(addr?.street ?? ""),
+        escape(addr?.floor ?? ""),
+        escape(addr?.apartment ?? ""),
+        escape(addr?.city ?? ""),
+        escape(addr?.state ?? ""),
+        escape(addr?.zipCode ?? ""),
+        escape(addr?.addressNotes ?? ""),
+        escape(Number(order.total)),
+      ].join(",");
+    });
+
+    // BOM para que Excel abra correctamente caracteres especiales (tildes, ñ)
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const timestamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `pawgo-envios-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast({
+      type: "success",
+      message: `✅ CSV exportado con ${orders.length} orden ${orders.length !== 1 ? "es" : ""}.`,
+    });
+  };
+
   if (!user || !isAdmin) {
     return null;
   }
@@ -99,11 +178,25 @@ export default function OrdersPage() {
     <DashboardLayout>
       <div className="py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-gray-900">Órdenes</h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Gestiona y visualiza todas las órdenes del sistema
-            </p>
+          {/* Header */}
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Órdenes</h1>
+              <p className="mt-2 text-sm text-gray-600">
+                Gestiona y visualiza todas las órdenes del sistema
+              </p>
+            </div>
+            <button
+              onClick={exportToCSV}
+              disabled={orders.length === 0}
+              title="Exportar datos de envío de las órdenes visibles como CSV"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+            >
+              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Exportar CSV
+            </button>
           </div>
 
           {/* Filters */}
@@ -131,11 +224,14 @@ export default function OrdersPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-turquoise"
                 >
                   <option value="">Todos los estados</option>
+                  <option value="awaiting_payment">Esperando pago</option>
                   <option value="pending">Pendiente</option>
-                  <option value="paid">Pagado</option>
+                  <option value="paid">Pago confirmado</option>
+                  <option value="ready_to_ship">Preparado para envío</option>
                   <option value="shipped">Enviado</option>
                   <option value="delivered">Entregado</option>
                   <option value="cancelled">Cancelado</option>
+                  <option value="refunded">Reembolsado</option>
                 </select>
               </div>
             </div>
@@ -200,17 +296,7 @@ export default function OrdersPage() {
                                 "bg-gray-100 text-gray-800"
                               }`}
                             >
-                              {order.status === "pending"
-                                ? "Pendiente"
-                                : order.status === "paid"
-                                ? "Pagado"
-                                : order.status === "shipped"
-                                ? "Enviado"
-                                : order.status === "delivered"
-                                ? "Entregado"
-                                : order.status === "cancelled"
-                                ? "Cancelado"
-                                : order.status}
+                              {STATUS_LABELS[order.status] || order.status}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">

@@ -427,16 +427,29 @@ export default function OrderDetailsPage() {
       <div className="py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-6">
-            <Link
-              href="/dashboard/orders"
-              className="text-primary-turquoise hover:text-primary-turquoise/80 mb-4 inline-block"
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <Link
+                href="/dashboard/orders"
+                className="text-primary-turquoise hover:text-primary-turquoise/80 mb-4 inline-block"
+              >
+                ← Volver a órdenes
+              </Link>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Detalles de la Orden
+              </h1>
+              <p className="mt-2 text-sm text-gray-600">ID: {order.id}</p>
+            </div>
+            <button
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm no-print"
             >
-              ← Volver a órdenes
-            </Link>
-            <h1 className="text-3xl font-bold text-gray-900">
-              Detalles de la Orden
-            </h1>
-            <p className="mt-2 text-sm text-gray-600">ID: {order.id}</p>
+              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Imprimir etiqueta
+            </button>
+          </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -653,7 +666,7 @@ export default function OrderDetailsPage() {
 
               {/* Shipping Address */}
               {order.shippingAddress && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 no-print">
                   <h2 className="text-xl font-semibold text-gray-900 mb-4">
                     Dirección de Envío
                   </h2>
@@ -662,17 +675,23 @@ export default function OrderDetailsPage() {
                       <>
                         <p className="font-medium text-gray-900">
                           {order.shippingAddress.street}
+                          {order.shippingAddress.floor && `, Piso ${order.shippingAddress.floor}`}
+                          {order.shippingAddress.apartment && ` Dpto. ${order.shippingAddress.apartment}`}
                         </p>
                         <p className="text-gray-600">
-                          {order.shippingAddress.city},{" "}
-                          {order.shippingAddress.state}
+                          {order.shippingAddress.city}, {order.shippingAddress.state}
                         </p>
                         <p className="text-gray-600">
-                          {order.shippingAddress.zipCode}
+                          CP: {order.shippingAddress.zipCode}
                         </p>
                         <p className="text-gray-600">
                           {order.shippingAddress.country}
                         </p>
+                        {order.shippingAddress.addressNotes && (
+                          <div className="pt-2 mt-2 border-t border-gray-100 italic text-gray-500">
+                            <span className="font-medium text-gray-700 not-italic">Obs:</span> {order.shippingAddress.addressNotes}
+                          </div>
+                        )}
                       </>
                     ) : (
                       <p className="text-gray-500">
@@ -687,6 +706,96 @@ export default function OrderDetailsPage() {
         </div>
       </div>
       {ToastView}
+      
+      {/* Print Label - Only visible in print */}
+      <div className="hidden print:block fixed inset-0 bg-white z-[9999] p-4 text-black">
+        <PrintLabel order={order} />
+        
+        <style jsx global>{`
+          @media print {
+            body { 
+              background: white !important; 
+              color: black !important;
+            }
+            .no-print { display: none !important; }
+            header, footer, nav, aside { display: none !important; }
+            #main-content { margin: 0 !important; border: 0 !important; width: 100% !important; }
+            /* Hide anything inside DashboardLayout that isn't the print-label */
+            div > div.dashboard-content-wrapper { display: none !important; }
+            /* Root container hide */
+            #__next, main { margin: 0 !important; padding: 0 !important; }
+            @page {
+              size: A6;
+              margin: 8mm;
+            }
+          }
+        `}</style>
+      </div>
     </DashboardLayout>
   );
 }
+
+function PrintLabel({ order }: { order: Order }) {
+  const addr = order.shippingAddress as any;
+  const lead = order.lead as any;
+
+  if (!addr) return null;
+
+  return (
+    <div className="border-2 border-black p-4 h-full flex flex-col font-sans">
+      {/* Destinatario */}
+      <div className="mb-6">
+        <h3 className="text-xs font-bold uppercase border-b border-black mb-1">Destinatario</h3>
+        <p className="text-lg font-bold leading-tight">
+          {lead?.name} {lead?.lastName}
+        </p>
+        {lead?.phoneNumber && (
+          <p className="text-sm">Tel: {lead.phoneNumber}</p>
+        )}
+      </div>
+
+      {/* Dirección */}
+      <div className="mb-6 flex-1">
+        <h3 className="text-xs font-bold uppercase border-b border-black mb-1">Dirección de Envío</h3>
+        <p className="text-base font-bold leading-tight">
+          {addr.street}
+          {addr.floor && `, Piso ${addr.floor}`}
+          {addr.apartment && ` Dpto. ${addr.apartment}`}
+        </p>
+        <p className="text-base uppercase font-bold">
+          {addr.city}, {addr.state}
+        </p>
+        <p className="text-xl font-black mt-1">
+          CP: {addr.zipCode}
+        </p>
+        <p className="text-xs mt-2 uppercase">{addr.country}</p>
+        
+        {addr.addressNotes && (
+          <div className="mt-4 p-2 bg-gray-50 border border-black/10 rounded">
+            <p className="text-[10px] font-bold uppercase mb-0.5 leading-none">Observaciones:</p>
+            <p className="text-xs leading-tight italic">{addr.addressNotes}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Footer Label */}
+      <div className="mt-auto pt-4 border-t-2 border-dashed border-black">
+        <div className="flex justify-between items-end">
+          <div>
+            <p className="text-[10px] font-bold uppercase">Orden #</p>
+            <p className="text-xs font-mono">{order.id.slice(0, 12).toUpperCase()}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[14px] font-bold italic">PAWGO 🐾</p>
+          </div>
+        </div>
+        
+        {/* Simplified Items for Prep */}
+        <div className="mt-2 text-[9px] text-gray-600 line-clamp-2">
+          {order.items?.map(i => `${i.quantity}x ${i.product?.name ?? i.name}`).join(' | ')}
+        </div>
+      </div>
+    </div>
+  );
+}
+
