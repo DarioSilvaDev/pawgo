@@ -382,7 +382,7 @@ function ComunidadPageContent() {
                                 <div className="text-center mb-8">
                                     <div className="text-5xl mb-4">📧</div>
                                     <h2 className="text-2xl font-bold text-gray-800">Verificá tu compra</h2>
-                                    <p className="text-gray-500 mt-2">Ingresá el email con el que compraste para continuar.</p>
+                                    <p className="text-gray-500 mt-2">Ingresá el email con el que hiciste la compra para continuar.</p>
                                 </div>
                                 <form onSubmit={handleValidateEmail} className="space-y-4">
                                     <div>

@@ -2,6 +2,7 @@ import { prisma } from "../config/prisma.client.js";
 import { CreateStockReservationDto } from "../shared/index.js";
 import { PgBoss } from "pg-boss";
 import { JOB_STOCK_REPLENISHMENT } from "../jobs/stock-reservation.job.js";
+import { emailService } from "./email.service.js";
 
 export class StockReservationService {
     constructor(private readonly boss: PgBoss) { }
@@ -68,6 +69,37 @@ export class StockReservationService {
                 });
                 results.push(created);
             }
+        }
+
+        // 3. Send confirmation email
+        try {
+            // Fetch product and variant names for the email
+            const variantDetails = await prisma.productVariant.findMany({
+                where: {
+                    id: { in: items.map(item => item.variantId) }
+                },
+                include: {
+                    product: {
+                        select: { name: true }
+                    }
+                }
+            });
+
+            const reservedItems = variantDetails.map(v => ({
+                productName: v.product.name,
+                variantName: v.name,
+                quantity: items.find(i => i.variantId === v.id)?.quantity || 1
+            }));
+
+            await emailService.sendStockReservationConfirmationEmail(
+                email,
+                name || lead?.name || undefined,
+                reservedItems
+            );
+            console.log(`✅ Stock reservation confirmation email sent to: ${email}`);
+        } catch (error) {
+            console.error("❌ Failed to send stock reservation confirmation email:", error);
+            // Don't throw error to avoid failing the whole request
         }
 
         return { leadId, count: results.length };

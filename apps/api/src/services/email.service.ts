@@ -632,6 +632,80 @@ export class EmailService {
   }
 
   /**
+   * Send stock reservation confirmation email to lead
+   */
+  async sendStockReservationConfirmationEmail(
+    email: string,
+    name: string | undefined,
+    reservedItems: Array<{ productName: string; variantName: string; quantity: number }>
+  ): Promise<void> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .header img { max-width: 200px; height: auto; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+            .reservation-box { background-color: white; border: 2px solid #00CED1; border-radius: 8px; padding: 20px; margin: 20px 0; }
+            .item-row { border-bottom: 1px solid #eee; padding: 10px 0; display: flex; justify-content: space-between; align-items: center; }
+            .item-row:last-child { border-bottom: none; }
+            .variant-tag { background-color: #f0f0f0; color: #666; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase; }
+            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+            .info-box { background-color: #e7f3ff; border-left: 4px solid #00CED1; padding: 12px; margin: 20px 0; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            ${getEmailHeader()}
+            <div class="content">
+              <h2>🐾 Confirmación de reserva PawGo</h2>
+              <p>Hola${name ? ` ${name}` : ""},</p>
+              <p>Hemos recibido correctamente tu reserva de stock. Te avisaremos por este medio en cuanto los siguientes productos vuelvan a estar disponibles:</p>
+              
+              <div class="reservation-box">
+                <p style="margin: 0 0 10px 0; font-size: 12px; color: #666; font-weight: bold; text-transform: uppercase;">Detalle de productos reservados:</p>
+                ${reservedItems.map(item => `
+                  <div class="item-row">
+                    <div style="flex: 1;">
+                      <strong style="font-size: 14px;">${item.productName}</strong>
+                      <span class="variant-tag">${item.variantName}</span>
+                    </div>
+                    <div style="font-weight: bold; color: #00CED1; margin-left: 10px;">x${item.quantity}</div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <div class="info-box">
+                <p style="margin: 0;"><strong>ℹ️ Importante:</strong> Esta reserva no garantiza el precio actual, pero te asegura ser uno de los primeros en enterarte apenas tengamos stock disponible nuevamente.</p>
+              </div>
+
+              <p>Estamos trabajando para reponer el stock lo antes posible. ¡Gracias por elegirnos y por tu paciencia! 🐕</p>
+              
+              <p style="margin-top: 30px;">¡Saludos de todo el equipo!</p>
+              <p><strong>PawGo</strong> 🐾</p>
+            </div>
+            <div class="footer">
+              <p>© 2026 PawGo. Todos los derechos reservados.</p>
+              <p>Recibiste este email porque te anotaste en la lista de espera de stock en nuestro sitio web.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendViaResend({
+      to: email,
+      subject: "🐾 Reserva de stock confirmada - PawGo",
+      html,
+    });
+  }
+
+
+  /**
    * Send product availability notification to lead with unique discount code (24h validity)
    */
   async sendProductAvailabilityNotification(

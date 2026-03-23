@@ -427,29 +427,29 @@ export default function OrderDetailsPage() {
       <div className="py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-6">
-          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <Link
-                href="/dashboard/orders"
-                className="text-primary-turquoise hover:text-primary-turquoise/80 mb-4 inline-block"
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <Link
+                  href="/dashboard/orders"
+                  className="text-primary-turquoise hover:text-primary-turquoise/80 mb-4 inline-block"
+                >
+                  ← Volver a órdenes
+                </Link>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  Detalles de la Orden
+                </h1>
+                <p className="mt-2 text-sm text-gray-600">ID: {order.id}</p>
+              </div>
+              <button
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm no-print"
               >
-                ← Volver a órdenes
-              </Link>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Detalles de la Orden
-              </h1>
-              <p className="mt-2 text-sm text-gray-600">ID: {order.id}</p>
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Imprimir etiqueta
+              </button>
             </div>
-            <button
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm no-print"
-            >
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
-              Imprimir etiqueta
-            </button>
-          </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -706,41 +706,28 @@ export default function OrderDetailsPage() {
         </div>
       </div>
       {ToastView}
-      
+
       {/* Print Label - Only visible in print */}
-      <div className="hidden print:block !bg-white p-0 text-black print-container">
+      <div className="hidden print:block fixed inset-0 bg-white z-[9999] p-4 text-black">
         <PrintLabel order={order} />
-        
+
         <style jsx global>{`
           @media print {
-            /* Reset absolute/fixed positions that might cause overflow */
-            html, body {
-              height: 100%;
-              margin: 0 !important;
-              padding: 0 !important;
-              overflow: hidden;
+            body { 
+              background: white !important; 
+              color: black !important;
             }
-            
-            /* Hide EVERYTHING except the print container */
-            body > *:not(.print-container) {
-              display: none !important;
-            }
-            
-            .print-container {
-              display: block !important;
-              width: 100% !important;
-              height: 100% !important;
-              margin: 0 !important;
-              padding: 0 !important;
-              position: static !important;
-            }
-
+            .no-print { display: none !important; }
+            header, footer, nav, aside { display: none !important; }
+            #main-content { margin: 0 !important; border: 0 !important; width: 100% !important; }
+            /* Hide anything inside DashboardLayout that isn't the print-label */
+            div > div.dashboard-content-wrapper { display: none !important; }
+            /* Root container hide */
+            #__next, main { margin: 0 !important; padding: 0 !important; }
             @page {
               size: A6;
-              margin: 5mm;
+              margin: 8mm;
             }
-            
-            .no-print { display: none !important; }
           }
         `}</style>
       </div>
@@ -784,7 +771,7 @@ function PrintLabel({ order }: { order: Order }) {
           </p>
         </div>
         <p className="text-sm mt-4 uppercase font-bold text-gray-700">{addr.country}</p>
-        
+
         {addr.addressNotes && (
           <div className="mt-8 p-4 bg-gray-50 border-2 border-black rounded-lg">
             <p className="text-xs font-bold uppercase mb-1 leading-none">Observaciones de entrega:</p>
@@ -807,7 +794,7 @@ function PrintLabel({ order }: { order: Order }) {
             <p className="text-[10px] font-bold uppercase">Tienda Online</p>
           </div>
         </div>
-        
+
         {/* Simplified Items for Prep */}
         <div className="mt-2 text-xs font-bold text-gray-800 border-t border-black/20 pt-2">
           PRODUCTOS: {order.items?.map(i => `${i.quantity}x ${i.product?.name ?? i.name}`).join(' | ')}
