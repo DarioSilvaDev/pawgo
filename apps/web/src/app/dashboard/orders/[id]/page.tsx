@@ -708,26 +708,39 @@ export default function OrderDetailsPage() {
       {ToastView}
       
       {/* Print Label - Only visible in print */}
-      <div className="hidden print:block fixed inset-0 bg-white z-[9999] p-4 text-black">
+      <div className="hidden print:block !bg-white p-0 text-black print-container">
         <PrintLabel order={order} />
         
         <style jsx global>{`
           @media print {
-            body { 
-              background: white !important; 
-              color: black !important;
+            /* Reset absolute/fixed positions that might cause overflow */
+            html, body {
+              height: 100%;
+              margin: 0 !important;
+              padding: 0 !important;
+              overflow: hidden;
             }
-            .no-print { display: none !important; }
-            header, footer, nav, aside { display: none !important; }
-            #main-content { margin: 0 !important; border: 0 !important; width: 100% !important; }
-            /* Hide anything inside DashboardLayout that isn't the print-label */
-            div > div.dashboard-content-wrapper { display: none !important; }
-            /* Root container hide */
-            #__next, main { margin: 0 !important; padding: 0 !important; }
+            
+            /* Hide EVERYTHING except the print container */
+            body > *:not(.print-container) {
+              display: none !important;
+            }
+            
+            .print-container {
+              display: block !important;
+              width: 100% !important;
+              height: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              position: static !important;
+            }
+
             @page {
               size: A6;
-              margin: 8mm;
+              margin: 5mm;
             }
+            
+            .no-print { display: none !important; }
           }
         `}</style>
       </div>
@@ -742,57 +755,62 @@ function PrintLabel({ order }: { order: Order }) {
   if (!addr) return null;
 
   return (
-    <div className="border-2 border-black p-4 h-full flex flex-col font-sans">
+    <div className="border-[3px] border-black p-6 h-full flex flex-col font-sans bg-white" style={{ height: 'calc(100vh - 10mm)' }}>
       {/* Destinatario */}
-      <div className="mb-6">
-        <h3 className="text-xs font-bold uppercase border-b border-black mb-1">Destinatario</h3>
-        <p className="text-lg font-bold leading-tight">
+      <div className="mb-8">
+        <h3 className="text-sm font-bold uppercase border-b-2 border-black mb-2 tracking-wider">Destinatario</h3>
+        <p className="text-4xl font-black leading-tight mb-1">
           {lead?.name} {lead?.lastName}
         </p>
         {lead?.phoneNumber && (
-          <p className="text-sm">Tel: {lead.phoneNumber}</p>
+          <p className="text-2xl font-bold italic">Tel: {lead.phoneNumber}</p>
         )}
       </div>
 
       {/* Dirección */}
-      <div className="mb-6 flex-1">
-        <h3 className="text-xs font-bold uppercase border-b border-black mb-1">Dirección de Envío</h3>
-        <p className="text-base font-bold leading-tight">
+      <div className="mb-8 flex-1">
+        <h3 className="text-sm font-bold uppercase border-b-2 border-black mb-2 tracking-wider">Dirección de Envío</h3>
+        <p className="text-3xl font-bold leading-tight mb-2">
           {addr.street}
           {addr.floor && `, Piso ${addr.floor}`}
           {addr.apartment && ` Dpto. ${addr.apartment}`}
         </p>
-        <p className="text-base uppercase font-bold">
+        <p className="text-3xl uppercase font-black mb-4">
           {addr.city}, {addr.state}
         </p>
-        <p className="text-xl font-black mt-1">
-          CP: {addr.zipCode}
-        </p>
-        <p className="text-xs mt-2 uppercase">{addr.country}</p>
+        <div className="inline-block border-4 border-black px-4 py-2 mt-2">
+          <p className="text-5xl font-black">
+            CP: {addr.zipCode}
+          </p>
+        </div>
+        <p className="text-sm mt-4 uppercase font-bold text-gray-700">{addr.country}</p>
         
         {addr.addressNotes && (
-          <div className="mt-4 p-2 bg-gray-50 border border-black/10 rounded">
-            <p className="text-[10px] font-bold uppercase mb-0.5 leading-none">Observaciones:</p>
-            <p className="text-xs leading-tight italic">{addr.addressNotes}</p>
+          <div className="mt-8 p-4 bg-gray-50 border-2 border-black rounded-lg">
+            <p className="text-xs font-bold uppercase mb-1 leading-none">Observaciones de entrega:</p>
+            <p className="text-lg leading-snug font-medium italic underline decoration-1 underline-offset-4">{addr.addressNotes}</p>
           </div>
         )}
       </div>
 
       {/* Footer Label */}
-      <div className="mt-auto pt-4 border-t-2 border-dashed border-black">
-        <div className="flex justify-between items-end">
+      <div className="mt-auto pt-6 border-t-[3px] border-dashed border-black">
+        <div className="flex justify-between items-end mb-4">
           <div>
-            <p className="text-[10px] font-bold uppercase">Orden #</p>
-            <p className="text-xs font-mono">{order.id.slice(0, 12).toUpperCase()}</p>
+            <p className="text-xs font-bold uppercase mb-1">Orden de Compra #</p>
+            <p className="text-2xl font-black font-mono tracking-tighter bg-black text-white px-2">
+              {order.id.slice(0, 8).toUpperCase()}
+            </p>
           </div>
           <div className="text-right">
-            <p className="text-[14px] font-bold italic">PAWGO 🐾</p>
+            <p className="text-3xl font-black italic tracking-tighter">PAWGO 🐾</p>
+            <p className="text-[10px] font-bold uppercase">Tienda Online</p>
           </div>
         </div>
         
         {/* Simplified Items for Prep */}
-        <div className="mt-2 text-[9px] text-gray-600 line-clamp-2">
-          {order.items?.map(i => `${i.quantity}x ${i.product?.name ?? i.name}`).join(' | ')}
+        <div className="mt-2 text-xs font-bold text-gray-800 border-t border-black/20 pt-2">
+          PRODUCTOS: {order.items?.map(i => `${i.quantity}x ${i.product?.name ?? i.name}`).join(' | ')}
         </div>
       </div>
     </div>
