@@ -1,7 +1,7 @@
 import { Hero } from "@/components/sections/Hero";
 import { Product } from "@/components/sections/Product";
 import { Benefits } from "@/components/sections/Benefits";
-import { LaunchStatus } from "@/components/sections/LaunchStatus";
+// import { LaunchStatus } from "@/components/sections/LaunchStatus";
 import { PageViewTracker } from "@/components/PageViewTracker";
 
 import { Footer } from "@/components/Footer";
@@ -13,7 +13,7 @@ export default function Home() {
       <Hero />
       <Product />
       <Benefits />
-      <LaunchStatus />
+      {/* <LaunchStatus /> */}
       <Footer />
     </main>
   );
