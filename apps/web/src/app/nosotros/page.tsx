@@ -34,7 +34,7 @@ export default function Nosotros() {
                             <div className="relative bg-[#1a1c1e] p-10 rounded-2xl border border-white/5 shadow-2xl">
                                 <h3 className="text-3xl font-bold text-white mb-6">Nuestra Visión</h3>
                                 <p className="text-lg text-gray-400 leading-relaxed">
-                                    Ser la marca líder en Argentina reconocida por la innovación en accesorios para mascotas, fomentando una comunidad global de "pet explorers" que valoran la calidad y la durabilidad.
+                                    Ser la marca líder en Argentina reconocida por la innovación en accesorios para mascotas, fomentando una comunidad global de &quot;pet explorers&quot; que valoran la calidad y la durabilidad.
                                 </p>
                             </div>
                         </div>
