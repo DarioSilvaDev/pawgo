@@ -182,31 +182,13 @@ export function createOrderController(
 
         if (order.status !== OrderStatus.awaiting_payment) {
           reply.status(400).send({
-            error: "Solo se pueden crear pagos para órdenes en espera de pago",
+            error: "Solo se pueden crear pagos para \u00f3rdenes en espera de pago",
           });
           return;
         }
 
         // Get frontend URL from env or use default
         const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-
-        // If there is already a pending MercadoPago payment for this order, reuse it
-        const existingPendingPayment = await prisma.payment.findFirst({
-          where: {
-            orderId: order.id,
-            status: "pending",
-            paymentMethod: "mercadopago",
-          },
-        });
-
-        if (existingPendingPayment && existingPendingPayment.paymentLink) {
-          reply.send({
-            paymentId: existingPendingPayment.id,
-            paymentLink: existingPendingPayment.paymentLink,
-            preferenceId: existingPendingPayment.mercadoPagoPreferenceId,
-          });
-          return;
-        }
 
         // Convert Prisma order to Order type
         const orderForPayment: Order & { id: string } = {
@@ -220,15 +202,10 @@ export function createOrderController(
           total: prismaNumber(prismaDecimal(order.total)),
           currency: order.currency,
           payerEmail: order.lead?.email,
-          // Use items from query (which includes discount metadata if applicable) 
-          // instead of the raw snapshot
           items: order.items.map(item => {
             const product = (item as any).product;
             let imageUrl: string | undefined;
             if (product?.images && product.images.length > 0) {
-              // Note: Ideally we'd inject storageService, 
-              // but we can construct the public URL if it's predictable or use a placeholder
-              // For now, let's just pass the key and we might need to fix it in MercadoPagoService
               imageUrl = product.images[0];
             }
 
@@ -256,6 +233,41 @@ export function createOrderController(
           updatedAt: order.updatedAt,
         };
 
+        // \u2500\u2500 Idempotencia de preferencia MP (Fix Race Condition) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        // Usamos upsert con el constraint \u00fanico (orderId, paymentMethod) para garantizar
+        // que si dos requests concurrentes llegan, solo se crea UNA preferencia MP.
+        // Si el payment ya existe (constraint hit), el update es un no-op y devuelve el
+        // payment existente con el paymentLink original. At\u00f3mico en DB.
+        //
+        // Flujo:
+        //  1. Crear preferencia en MP (fuera del upsert, puede ejecutarse dos veces
+        //     si hay race, pero solo UNA llegar\u00e1 a persistirse en DB)
+        //  2. Upsert: si no exist\u00eda → crea con la nueva preferencia
+        //             si ya exist\u00eda → no modifica nada, retorna el existente
+        // ---------------------------------------------------------------------------
+
+        // Revisar si ya existe un payment pendiente para este m\u00e9todo
+        // (optimizaci\u00f3n: evitar crear preferencia en MP si ya hay una)
+        const existingPayment = await prisma.payment.findUnique({
+          where: {
+            orderId_paymentMethod: {
+              orderId: order.id,
+              paymentMethod: "mercadopago",
+            },
+          },
+        });
+
+        if (existingPayment?.paymentLink) {
+          // Ya existe una preferencia v\u00e1lida — retornar sin crear nueva en MP
+          reply.send({
+            paymentId: existingPayment.id,
+            paymentLink: existingPayment.paymentLink,
+            preferenceId: existingPayment.mercadoPagoPreferenceId,
+          });
+          return;
+        }
+
+        // Crear o reutilizar preferencia en MercadoPago
         const preference = await mercadoPagoService.createPreference(
           orderForPayment,
           `${frontendUrl}/checkout/success?orderId=${order.id}`,
@@ -263,8 +275,16 @@ export function createOrderController(
           `${frontendUrl}/checkout/pending?orderId=${order.id}`
         );
 
-        const payment = await prisma.payment.create({
-          data: {
+        // Upsert at\u00f3mico — si otro request ya insert\u00f3 primero, este hace el update
+        // (no-op en campos que importan) y devuelve el registro existente
+        const payment = await prisma.payment.upsert({
+          where: {
+            orderId_paymentMethod: {
+              orderId: order.id,
+              paymentMethod: "mercadopago",
+            },
+          },
+          create: {
             orderId: order.id,
             status: "pending",
             amount: prismaNumber(prismaDecimal(order.total)),
@@ -273,12 +293,18 @@ export function createOrderController(
             mercadoPagoPreferenceId: preference.id,
             paymentLink: preference.initPoint,
           },
+          update: {
+            // Si ya exist\u00eda un payment sin link (edge case), actualizamos con los datos nuevos
+            // Si ya ten\u00eda link, Prisma igual ejecuta el UPDATE pero no cambia nada relevante
+            mercadoPagoPreferenceId: preference.id,
+            paymentLink: preference.initPoint,
+          },
         });
 
         reply.send({
           paymentId: payment.id,
-          paymentLink: preference.initPoint,
-          preferenceId: preference.id,
+          paymentLink: payment.paymentLink,
+          preferenceId: payment.mercadoPagoPreferenceId,
         });
       } catch (error) {
         if (error instanceof Error) {

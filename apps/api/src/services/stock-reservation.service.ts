@@ -119,7 +119,13 @@ export class StockReservationService {
 
         // Queue notification jobs
         for (const reservation of pending) {
-            await this.boss.send(JOB_STOCK_REPLENISHMENT, { reservationId: reservation.id });
+            // singletonKey previene jobs duplicados si processReplenishment se llama
+            // dos veces para la misma variante (ej: dos admins actualizan stock simultáneamente)
+            await this.boss.send(
+                JOB_STOCK_REPLENISHMENT,
+                { reservationId: reservation.id },
+                { singletonKey: `replenishment:${reservation.id}` }
+            );
         }
 
         console.log(`🚀 Queued ${pending.length} replenishment notifications for variant ${variantId}`);

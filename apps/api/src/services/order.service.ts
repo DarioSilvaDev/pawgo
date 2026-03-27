@@ -84,50 +84,83 @@ export class OrderService {
     const itemsWithDetails: OrderItem[] = [];
     let subtotal = prismaDecimal(0);
 
-    for (const item of data.items) {
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId },
-        include: { variants: true },
-      });
+    // Track variants that had their stock decremented, for rollback on error
+    const stockDecrements: Array<{ variantId: string; quantity: number }> = [];
 
-      if (!product) {
-        throw new Error(`Producto ${item.productId} no encontrado`);
-      }
-      if (!product.isActive) {
-        throw new Error(`Producto ${product.name} no está disponible`);
-      }
+    try {
+      for (const item of data.items) {
+        const product = await prisma.product.findUnique({
+          where: { id: item.productId },
+          include: { variants: true },
+        });
 
-      let variant = null;
-      if (item.variantId) {
-        variant = product.variants.find((v: (typeof product.variants)[0]) => v.id === item.variantId);
-        if (!variant) throw new Error(`Variante ${item.variantId} no encontrada`);
-        if (!variant.isActive) throw new Error(`Variante ${variant.name} no está disponible`);
-        if (variant.stock !== null && variant.stock < item.quantity) {
-          throw new Error(`Stock insuficiente para ${variant.name}. Disponible: ${variant.stock}`);
+        if (!product) {
+          throw new Error(`Producto ${item.productId} no encontrado`);
         }
-      } else {
-        if (product.variants.length > 0) {
-          variant = product.variants.find((v: (typeof product.variants)[0]) => v.isActive);
-          if (!variant) throw new Error(`No hay variantes disponibles para ${product.name}`);
+        if (!product.isActive) {
+          throw new Error(`Producto ${product.name} no está disponible`);
         }
+
+        let variant = null;
+        if (item.variantId) {
+          variant = product.variants.find((v: (typeof product.variants)[0]) => v.id === item.variantId);
+          if (!variant) throw new Error(`Variante ${item.variantId} no encontrada`);
+          if (!variant.isActive) throw new Error(`Variante ${variant.name} no está disponible`);
+
+          // ── Decremento atómico de stock (Fix TOCTOU) ──────────────────────
+          // Si el stock es tracking (no null), lo decrementamos de forma atómica
+          // usando una condición en el WHERE: solo actualiza si stock >= quantity.
+          // Si count === 0, significa que otro request ganó la carrera → error.
+          if (variant.stock !== null) {
+            const stockUpdate = await prisma.productVariant.updateMany({
+              where: { id: variant.id, stock: { gte: item.quantity } },
+              data: { stock: { decrement: item.quantity } },
+            });
+            if (stockUpdate.count === 0) {
+              throw new Error(
+                `Stock insuficiente para ${variant.name}. No hay unidades disponibles.`
+              );
+            }
+            // Registrar para posible rollback si algo falla más adelante
+            stockDecrements.push({ variantId: variant.id, quantity: item.quantity });
+          }
+        } else {
+          if (product.variants.length > 0) {
+            variant = product.variants.find((v: (typeof product.variants)[0]) => v.isActive);
+            if (!variant) throw new Error(`No hay variantes disponibles para ${product.name}`);
+          }
+        }
+
+        const unitPrice = getEffectivePrice(product, variant);
+        const itemSubtotal = unitPrice.mul(item.quantity);
+        subtotal = subtotal.add(itemSubtotal);
+
+        itemsWithDetails.push({
+          productId: product.id,
+          variantId: variant?.id,
+          productName: product.name,
+          variantName: variant?.name,
+          size: variant?.size || undefined,
+          quantity: item.quantity,
+          unitPrice: prismaNumber(unitPrice),
+          discount: 0,
+          subtotal: prismaNumber(itemSubtotal),
+          total: prismaNumber(itemSubtotal),
+        });
       }
-
-      const unitPrice = getEffectivePrice(product, variant);
-      const itemSubtotal = unitPrice.mul(item.quantity);
-      subtotal = subtotal.add(itemSubtotal);
-
-      itemsWithDetails.push({
-        productId: product.id,
-        variantId: variant?.id,
-        productName: product.name,
-        variantName: variant?.name,
-        size: variant?.size || undefined,
-        quantity: item.quantity,
-        unitPrice: prismaNumber(unitPrice),
-        discount: 0,
-        subtotal: prismaNumber(itemSubtotal),
-        total: prismaNumber(itemSubtotal),
-      });
+    } catch (err) {
+      // Rollback de todos los decrementos de stock que se hicieron antes del error
+      if (stockDecrements.length > 0) {
+        await Promise.allSettled(
+          stockDecrements.map((d) =>
+            prisma.productVariant.update({
+              where: { id: d.variantId },
+              data: { stock: { increment: d.quantity } },
+            })
+          )
+        );
+      }
+      throw err;
     }
 
     // Create or update Lead
@@ -434,22 +467,46 @@ export class OrderService {
     // ── Guard: validate transition ────────────────────────────
     this.assertValidTransition(currentStatus, status);
 
-    // ── Persist new status ────────────────────────────────────
-    const updatedOrder = await prisma.order.update({
-      where: { id },
-      data: { status },
-      include: { lead: true },
-    });
+    // ── TX: Persist new status + event log + stock restore (si aplica) ──
+    // Todo en una transacción atómica para evitar estados inconsistentes si
+    // el proceso cae entre el update de la orden y el log del evento.
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      const updated = await tx.order.update({
+        where: { id },
+        data: { status },
+        include: { lead: true },
+      });
 
-    // ── Log event ─────────────────────────────────────────────
-    await prisma.orderEventLog.create({
-      data: {
-        orderId: id,
-        event: status.toUpperCase(),
-        fromStatus: currentStatus,
-        toStatus: status,
-        payload: meta ? (meta as unknown as Prisma.InputJsonValue) : undefined,
-      },
+      await tx.orderEventLog.create({
+        data: {
+          orderId: id,
+          event: status.toUpperCase(),
+          fromStatus: currentStatus,
+          toStatus: status,
+          payload: meta ? (meta as unknown as Prisma.InputJsonValue) : undefined,
+        },
+      });
+
+      // Restore de stock para cancelled/refunded — dentro de la TX para que
+      // sea atómico con el cambio de estado. Evita el escenario: status=cancelled
+      // pero stock no restaurado si el proceso cae entre ambas operaciones.
+      if (status === OrderStatus.cancelled || status === OrderStatus.refunded) {
+        for (const item of order.items) {
+          if (item.productVariantId) {
+            // updateMany con condición: solo restaurar variantes con tracking de stock (not null)
+            // Usamos updateMany + raw check en lugar de findUnique + update para reducir round-trips
+            await tx.productVariant.updateMany({
+              where: {
+                id: item.productVariantId,
+                stock: { not: null },
+              },
+              data: { stock: { increment: item.quantity } },
+            });
+          }
+        }
+      }
+
+      return updated;
     });
 
     const leadEmail = updatedOrder.lead?.email;
@@ -457,15 +514,8 @@ export class OrderService {
 
     // ── Side-effects when order is PAID ───────────────────────
     if (status === OrderStatus.paid) {
-      // Update stock
-      for (const item of order.items) {
-        if (item.productVariantId) {
-          await prisma.productVariant.update({
-            where: { id: item.productVariantId },
-            data: { stock: { decrement: item.quantity } },
-          });
-        }
-      }
+      // Stock ya fue decrementado atómicamente en order.create().
+      // No se vuelve a decrementar aquí para evitar doble descuento.
       // Create commission if discount code was used
       if (order.discountCodeId) {
         await this.commissionService.createFromOrder(order.id);
@@ -490,6 +540,7 @@ export class OrderService {
     }
 
     // ── Side-effects when order is CANCELLED ─────────────────
+    // (Stock ya fue restaurado dentro de la $transaction)
     if (status === OrderStatus.cancelled) {
       await eventDispatcher.dispatch(
         createEvent<PaymentRejectedPayload>(
@@ -508,6 +559,7 @@ export class OrderService {
     }
 
     // ── Side-effects when order is REFUNDED ──────────────────
+    // (Stock ya fue restaurado dentro de la $transaction)
     if (status === OrderStatus.refunded) {
       await eventDispatcher.dispatch(
         createEvent(OrderEventType.ORDER_REFUNDED, id, {

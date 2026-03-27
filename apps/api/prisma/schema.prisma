@@ -530,6 +530,8 @@ model Payment {
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  // Un solo intento de pago por m\u00e9todo por orden (previene race condition en createPayment)
+  @@unique([orderId, paymentMethod])
   @@index([orderId])
   @@index([mercadoPagoPaymentId])
   @@index([status])
