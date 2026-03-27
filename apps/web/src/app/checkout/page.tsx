@@ -404,14 +404,14 @@ export default function CheckoutPage() {
                             className="flex justify-between text-sm border-b border-gray-100 pb-2"
                           >
                             <span className="text-text-dark-gray">
-                              {item.product.name} - {item.variant.name} (x
+                              {item.product.name} - Talle {item.variant.size} (x
                               {item.quantity})
                             </span>
                             <span className="font-medium">
                               $
                               {(
-                                Number(item.variant.price ?? item.product.basePrice) * item.quantity
-                              ).toLocaleString("es-AR")}
+                                Number(orderData.subtotal).toLocaleString("es-AR")
+                              )}
                             </span>
                           </div>
                         ))}
