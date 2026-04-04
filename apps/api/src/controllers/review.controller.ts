@@ -1,5 +1,10 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import { ReviewService, CreateReviewDto } from "../services/review.service.js";
+import {
+    ReviewService,
+    CreateReviewDto,
+    UpsertReviewEmailAccessDto,
+    UpdateReviewEmailAccessDto,
+} from "../services/review.service.js";
 import { JwtPayload } from "../shared/index.js";
 
 export class ReviewController {
@@ -13,7 +18,6 @@ export class ReviewController {
     validateEmail = async (request: FastifyRequest, reply: FastifyReply) => {
         try {
             const { email } = request.body as { email?: string };
-            console.log("🚀 ~ ReviewController ~ email:", email)
 
             if (!email || typeof email !== "string") {
                 return reply.status(400).send({ error: "Email requerido." });
@@ -58,8 +62,13 @@ export class ReviewController {
             const { email, orderId, petName, rating, comment, photoConsent } = fields;
 
             // Validate required fields
-            if (!email || !orderId || !petName || !rating || !comment) {
-                return reply.status(400).send({ error: "Faltan campos requeridos: email, orderId, petName, rating, comment." });
+            if (!email || !petName || !rating || !comment) {
+                return reply.status(400).send({ error: "Faltan campos requeridos: email, petName, rating, comment." });
+            }
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email.trim())) {
+                return reply.status(400).send({ error: "Formato de email inválido." });
             }
 
             const parsedRating = parseInt(rating, 10);
@@ -77,7 +86,7 @@ export class ReviewController {
 
             const dto: CreateReviewDto = {
                 email: email.trim(),
-                orderId: orderId.trim(),
+                orderId: orderId?.trim() ? orderId.trim() : undefined,
                 petName: petName.trim(),
                 rating: parsedRating,
                 comment: comment.trim(),
@@ -221,6 +230,154 @@ export class ReviewController {
             }
             request.log.error(error);
             return reply.status(500).send({ error: "Error al actualizar destacado." });
+        }
+    };
+
+    /**
+     * POST /api/admin/reviews/email-access
+     * Admin only — create or update review quota for an email.
+     */
+    upsertReviewEmailAccess = async (request: FastifyRequest, reply: FastifyReply) => {
+        try {
+            const user = request.authUser as JwtPayload | undefined;
+            if (!user || user.role !== "admin") {
+                return reply.status(403).send({ error: "Acceso denegado." });
+            }
+
+            const { email, remainingReviews, notes } = request.body as {
+                email?: string;
+                remainingReviews?: number;
+                notes?: string;
+            };
+
+            if (!email || typeof email !== "string") {
+                return reply.status(400).send({ error: "Email requerido." });
+            }
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email.trim())) {
+                return reply.status(400).send({ error: "Formato de email inválido." });
+            }
+
+            if (
+                typeof remainingReviews !== "number" ||
+                !Number.isInteger(remainingReviews) ||
+                remainingReviews < 0
+            ) {
+                return reply.status(400).send({ error: "remainingReviews debe ser un entero mayor o igual a 0." });
+            }
+
+            const dto: UpsertReviewEmailAccessDto = {
+                email,
+                remainingReviews,
+                notes,
+                adminAuthId: user.authId,
+            };
+
+            const result = await this.reviewService.upsertReviewEmailAccess(dto);
+            return reply.send(result);
+        } catch (error) {
+            if (error instanceof Error) {
+                return reply.status(400).send({ error: error.message });
+            }
+            request.log.error(error);
+            return reply.status(500).send({ error: "Error al guardar la habilitación por email." });
+        }
+    };
+
+    /**
+     * GET /api/admin/reviews/email-access
+     * Admin only — list review email access rows.
+     */
+    getReviewEmailAccessList = async (request: FastifyRequest, reply: FastifyReply) => {
+        try {
+            const user = request.authUser as JwtPayload | undefined;
+            if (!user || user.role !== "admin") {
+                return reply.status(403).send({ error: "Acceso denegado." });
+            }
+
+            const query = request.query as {
+                search?: string;
+                page?: string;
+                limit?: string;
+                isActive?: string;
+            };
+
+            const result = await this.reviewService.getReviewEmailAccessList({
+                search: query.search,
+                page: query.page ? parseInt(query.page, 10) : 1,
+                limit: query.limit ? parseInt(query.limit, 10) : 20,
+                isActive:
+                    query.isActive === undefined
+                        ? undefined
+                        : query.isActive === "true"
+                            ? true
+                            : query.isActive === "false"
+                                ? false
+                                : undefined,
+            });
+
+            return reply.send(result);
+        } catch (error) {
+            if (error instanceof Error) {
+                return reply.status(400).send({ error: error.message });
+            }
+            request.log.error(error);
+            return reply.status(500).send({ error: "Error al listar habilitaciones por email." });
+        }
+    };
+
+    /**
+     * PATCH /api/admin/reviews/email-access/:id
+     * Admin only — update quota, notes or active state.
+     */
+    updateReviewEmailAccess = async (request: FastifyRequest, reply: FastifyReply) => {
+        try {
+            const user = request.authUser as JwtPayload | undefined;
+            if (!user || user.role !== "admin") {
+                return reply.status(403).send({ error: "Acceso denegado." });
+            }
+
+            const { id } = request.params as { id: string };
+            const body = request.body as {
+                remainingReviews?: number;
+                notes?: string | null;
+                isActive?: boolean;
+            };
+
+            if (body.remainingReviews !== undefined) {
+                if (
+                    typeof body.remainingReviews !== "number" ||
+                    !Number.isInteger(body.remainingReviews) ||
+                    body.remainingReviews < 0
+                ) {
+                    return reply.status(400).send({ error: "remainingReviews debe ser un entero mayor o igual a 0." });
+                }
+            }
+
+            if (body.isActive !== undefined && typeof body.isActive !== "boolean") {
+                return reply.status(400).send({ error: "isActive debe ser boolean." });
+            }
+
+            if (body.notes !== undefined && body.notes !== null && typeof body.notes !== "string") {
+                return reply.status(400).send({ error: "notes debe ser string o null." });
+            }
+
+            const dto: UpdateReviewEmailAccessDto = {
+                remainingReviews: body.remainingReviews,
+                notes: body.notes,
+                isActive: body.isActive,
+                adminAuthId: user.authId,
+            };
+
+            const result = await this.reviewService.updateReviewEmailAccess(id, dto);
+            return reply.send(result);
+        } catch (error) {
+            if (error instanceof Error) {
+                return reply.status(400).send({ error: error.message });
+            }
+            request.log.error(error);
+            return reply.status(500).send({ error: "Error al actualizar la habilitación por email." });
         }
     };
 }

@@ -763,9 +763,9 @@ model Review {
   id     String @id @default(cuid())
 
   // Relaciones con datos existentes
-  orderId String @unique // 1 reseña por orden (hard constraint)
+  orderId String? @unique // 1 reseña por orden (hard constraint), null si fue habilitada por admin
   leadId  String?        // FK a Lead (puede ser null si lead fue eliminado)
-  email   String // 1 reseña por email (principal barrera anti-duplicado)
+  email   String
 
   // Contenido
   petName   String
@@ -801,7 +801,7 @@ model Review {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  order Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Restrict)
   lead  Lead?  @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   mimos          ReviewMimo[]
@@ -815,6 +815,24 @@ model Review {
   @@index([leadId])
   @@index([createdAt])
   @@map("reviews")
+}
+
+model ReviewEmailAccess {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  remainingReviews Int       @default(0)
+  usedReviews      Int       @default(0)
+  isActive         Boolean   @default(true)
+  notes            String?
+  enabledBy        String
+  updatedBy        String
+  lastUsedAt       DateTime? @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([isActive])
+  @@index([updatedAt])
+  @@map("review_email_access")
 }
 
 model ReviewMimo {

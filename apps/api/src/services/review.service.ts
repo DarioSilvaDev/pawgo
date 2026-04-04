@@ -11,11 +11,13 @@ export interface ValidateEmailResult {
     reason?: "already_reviewed" | "no_purchase_found";
     reviewStatus?: string;
     orderId?: string;
+    accessType?: "purchase" | "admin_email";
+    remainingReviews?: number;
 }
 
 export interface CreateReviewDto {
     email: string;
-    orderId: string;
+    orderId?: string;
     petName: string;
     rating: number;
     comment: string;
@@ -34,6 +36,20 @@ export interface GetReviewsQuery {
     rating?: number;
     featured?: boolean;
     sort?: "recent" | "featured";
+}
+
+export interface UpsertReviewEmailAccessDto {
+    email: string;
+    remainingReviews: number;
+    notes?: string;
+    adminAuthId: string;
+}
+
+export interface UpdateReviewEmailAccessDto {
+    remainingReviews?: number;
+    notes?: string | null;
+    isActive?: boolean;
+    adminAuthId: string;
 }
 
 export class ReviewService {
@@ -62,6 +78,17 @@ export class ReviewService {
     async validateEmail(email: string): Promise<ValidateEmailResult> {
         const normalizedEmail = email.toLowerCase().trim();
 
+        const adminAccess = await prisma.reviewEmailAccess.findUnique({
+            where: { email: normalizedEmail },
+            select: {
+                isActive: true,
+                remainingReviews: true,
+            },
+        });
+
+        const hasAdminAccess =
+            !!adminAccess && adminAccess.isActive && adminAccess.remainingReviews > 0;
+
         // 1. Find the lead by email
         const lead = await prisma.lead.findFirst({
             where: { email: normalizedEmail },
@@ -69,6 +96,14 @@ export class ReviewService {
         });
 
         if (!lead) {
+            if (hasAdminAccess) {
+                return {
+                    canReview: true,
+                    accessType: "admin_email",
+                    remainingReviews: adminAccess.remainingReviews,
+                };
+            }
+
             return { canReview: false, reason: "no_purchase_found" };
         }
 
@@ -88,23 +123,43 @@ export class ReviewService {
         });
 
         if (orders.length === 0) {
+            if (hasAdminAccess) {
+                return {
+                    canReview: true,
+                    accessType: "admin_email",
+                    remainingReviews: adminAccess.remainingReviews,
+                };
+            }
+
             return { canReview: false, reason: "no_purchase_found" };
         }
 
         // 3. Find the first order that doesn't have a review yet
         const orderWithoutReview = orders.find((o) => !o.review);
 
-        if (!orderWithoutReview) {
-            // All shipped orders already have reviews
-            // We return the status of the most recent review for context
+        if (orderWithoutReview) {
             return {
-                canReview: false,
-                reason: "already_reviewed",
-                reviewStatus: orders[0].review?.status,
+                canReview: true,
+                orderId: orderWithoutReview.id,
+                accessType: "purchase",
             };
         }
 
-        return { canReview: true, orderId: orderWithoutReview.id };
+        if (hasAdminAccess) {
+            return {
+                canReview: true,
+                accessType: "admin_email",
+                remainingReviews: adminAccess.remainingReviews,
+            };
+        }
+
+        // All shipped orders already have reviews
+        // We return the status of the most recent review for context
+        return {
+            canReview: false,
+            reason: "already_reviewed",
+            reviewStatus: orders[0].review?.status,
+        };
     }
 
     /**
@@ -112,33 +167,63 @@ export class ReviewService {
      */
     async createReview(dto: CreateReviewDto): Promise<{ id: string; status: string }> {
         const normalizedEmail = dto.email.toLowerCase().trim();
+        const normalizedOrderId = dto.orderId?.trim() || null;
+
+        let leadId: string | null = null;
+        let purchaseVerified = false;
 
         // --- Re-validate: prevent race conditions and bypasses ---
-        // We validate that the order belongs to the email and doesn't have a review
-        const order = await prisma.order.findFirst({
-            where: {
-                id: dto.orderId,
-                status: OrderStatus.shipped,
-                lead: {
-                    email: normalizedEmail,
+        // We validate that either:
+        // 1) order belongs to the email and doesn't have a review, or
+        // 2) email is enabled by admin and has remaining quota.
+        if (normalizedOrderId) {
+            const order = await prisma.order.findFirst({
+                where: {
+                    id: normalizedOrderId,
+                    status: OrderStatus.shipped,
+                    lead: {
+                        email: normalizedEmail,
+                    },
                 },
-            },
-            select: {
-                id: true,
-                review: { select: { id: true } },
-                leadId: true,
-            },
-        });
+                select: {
+                    id: true,
+                    review: { select: { id: true } },
+                    leadId: true,
+                },
+            });
 
-        if (!order) {
-            throw new Error("No encontramos una compra pagada asociada a este email u orden.");
+            if (!order) {
+                throw new Error("No encontramos una compra pagada asociada a este email u orden.");
+            }
+
+            if (order.review) {
+                throw new Error("Esta orden ya tiene una reseña asociada.");
+            }
+
+            leadId = order.leadId;
+            purchaseVerified = true;
+        } else {
+            const access = await prisma.reviewEmailAccess.findUnique({
+                where: { email: normalizedEmail },
+                select: {
+                    id: true,
+                    isActive: true,
+                    remainingReviews: true,
+                },
+            });
+
+            if (!access || !access.isActive || access.remainingReviews <= 0) {
+                throw new Error("Este email no tiene cupos habilitados para reseñas.");
+            }
+
+            const lead = await prisma.lead.findFirst({
+                where: { email: normalizedEmail },
+                select: { id: true },
+            });
+
+            leadId = lead?.id ?? null;
+            purchaseVerified = false;
         }
-
-        if (order.review) {
-            throw new Error("Esta orden ya tiene una reseña asociada.");
-        }
-
-        const leadId = order.leadId;
 
         // --- Validate image magic bytes BEFORE inserting review ---
         // This way we reject invalid files early without creating a review record.
@@ -155,28 +240,67 @@ export class ReviewService {
         }
 
         // --- Insert review (without image first) ---
-        let imageUrl: string | undefined;
         try {
-            const review = await prisma.review.create({
-                data: {
-                    email: normalizedEmail,
-                    orderId: dto.orderId,
-                    leadId: leadId,
-                    petName: dto.petName.trim(),
-                    rating: dto.rating,
-                    comment: dto.comment.trim(),
-                    imageUrl: null, // will be updated after upload if image provided
-                    photoConsent: dto.photoConsent,
-                    consentedAt: dto.photoConsent ? new Date() : null,
-                    ipAddress: dto.ipAddress ?? null,
-                    userAgent: dto.userAgent ?? null,
-                    submittedFrom: dto.submittedFrom ?? "web_direct",
-                    purchaseVerified: true,
-                    status: "pending",
-                    isApproved: false,
-                },
-                select: { id: true, status: true },
-            });
+            const review = normalizedOrderId
+                ? await prisma.review.create({
+                    data: {
+                        email: normalizedEmail,
+                        orderId: normalizedOrderId,
+                        leadId,
+                        petName: dto.petName.trim(),
+                        rating: dto.rating,
+                        comment: dto.comment.trim(),
+                        imageUrl: null,
+                        photoConsent: dto.photoConsent,
+                        consentedAt: dto.photoConsent ? new Date() : null,
+                        ipAddress: dto.ipAddress ?? null,
+                        userAgent: dto.userAgent ?? null,
+                        submittedFrom: dto.submittedFrom ?? "web_direct",
+                        purchaseVerified,
+                        status: "pending",
+                        isApproved: false,
+                    },
+                    select: { id: true, status: true },
+                })
+                : await prisma.$transaction(async (tx) => {
+                    const consumed = await tx.reviewEmailAccess.updateMany({
+                        where: {
+                            email: normalizedEmail,
+                            isActive: true,
+                            remainingReviews: { gt: 0 },
+                        },
+                        data: {
+                            remainingReviews: { decrement: 1 },
+                            usedReviews: { increment: 1 },
+                            lastUsedAt: new Date(),
+                        },
+                    });
+
+                    if (consumed.count === 0) {
+                        throw new Error("No quedan cupos disponibles para este email.");
+                    }
+
+                    return tx.review.create({
+                        data: {
+                            email: normalizedEmail,
+                            orderId: null,
+                            leadId,
+                            petName: dto.petName.trim(),
+                            rating: dto.rating,
+                            comment: dto.comment.trim(),
+                            imageUrl: null,
+                            photoConsent: dto.photoConsent,
+                            consentedAt: dto.photoConsent ? new Date() : null,
+                            ipAddress: dto.ipAddress ?? null,
+                            userAgent: dto.userAgent ?? null,
+                            submittedFrom: dto.submittedFrom ?? "web_direct",
+                            purchaseVerified,
+                            status: "pending",
+                            isApproved: false,
+                        },
+                        select: { id: true, status: true },
+                    });
+                });
 
             // --- Upload image to Backblaze B2 if provided and valid ---
             // Now we have review.id, so we can build a clean, PII-free key.
@@ -232,13 +356,15 @@ export class ReviewService {
             }
 
             // Log on the order for auditing
-            await prisma.orderEventLog.create({
-                data: {
-                    orderId: dto.orderId,
-                    event: "REVIEW_SUBMITTED",
-                    payload: { reviewId: review.id, email: normalizedEmail },
-                },
-            });
+            if (normalizedOrderId) {
+                await prisma.orderEventLog.create({
+                    data: {
+                        orderId: normalizedOrderId,
+                        event: "REVIEW_SUBMITTED",
+                        payload: { reviewId: review.id, email: normalizedEmail },
+                    },
+                });
+            }
 
             return review;
         } catch (err) {
@@ -246,9 +372,155 @@ export class ReviewService {
                 err instanceof Prisma.PrismaClientKnownRequestError &&
                 err.code === "P2002"
             ) {
-                throw new Error("Esta orden ya tiene una reseña asociada.");
+                throw new Error(
+                    normalizedOrderId
+                        ? "Esta orden ya tiene una reseña asociada."
+                        : "Ya existe una reseña en conflicto para este email."
+                );
             }
             throw err;
+        }
+    }
+
+    async upsertReviewEmailAccess(dto: UpsertReviewEmailAccessDto) {
+        const normalizedEmail = dto.email.toLowerCase().trim();
+        const notes = dto.notes?.trim() ? dto.notes.trim() : null;
+
+        return prisma.reviewEmailAccess.upsert({
+            where: { email: normalizedEmail },
+            update: {
+                remainingReviews: dto.remainingReviews,
+                notes,
+                isActive: true,
+                updatedBy: dto.adminAuthId,
+            },
+            create: {
+                email: normalizedEmail,
+                remainingReviews: dto.remainingReviews,
+                notes,
+                enabledBy: dto.adminAuthId,
+                updatedBy: dto.adminAuthId,
+                isActive: true,
+            },
+            select: {
+                id: true,
+                email: true,
+                remainingReviews: true,
+                usedReviews: true,
+                isActive: true,
+                notes: true,
+                enabledBy: true,
+                updatedBy: true,
+                lastUsedAt: true,
+                createdAt: true,
+                updatedAt: true,
+            },
+        });
+    }
+
+    async getReviewEmailAccessList(query: {
+        search?: string;
+        page?: number;
+        limit?: number;
+        isActive?: boolean;
+    }) {
+        const page = query.page ?? 1;
+        const limit = Math.min(query.limit ?? 20, 100);
+        const skip = (page - 1) * limit;
+
+        const where: Prisma.ReviewEmailAccessWhereInput = {};
+
+        if (query.search?.trim()) {
+            where.email = {
+                contains: query.search.trim().toLowerCase(),
+                mode: "insensitive",
+            };
+        }
+
+        if (typeof query.isActive === "boolean") {
+            where.isActive = query.isActive;
+        }
+
+        const [rows, total] = await Promise.all([
+            prisma.reviewEmailAccess.findMany({
+                where,
+                orderBy: { updatedAt: "desc" },
+                skip,
+                take: limit,
+                select: {
+                    id: true,
+                    email: true,
+                    remainingReviews: true,
+                    usedReviews: true,
+                    isActive: true,
+                    notes: true,
+                    enabledBy: true,
+                    updatedBy: true,
+                    lastUsedAt: true,
+                    createdAt: true,
+                    updatedAt: true,
+                },
+            }),
+            prisma.reviewEmailAccess.count({ where }),
+        ]);
+
+        return {
+            data: rows,
+            pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+        };
+    }
+
+    async updateReviewEmailAccess(id: string, dto: UpdateReviewEmailAccessDto) {
+        const data: Prisma.ReviewEmailAccessUpdateInput = {
+            updatedBy: dto.adminAuthId,
+        };
+
+        if (typeof dto.remainingReviews === "number") {
+            data.remainingReviews = dto.remainingReviews;
+        }
+
+        if (typeof dto.isActive === "boolean") {
+            data.isActive = dto.isActive;
+        }
+
+        if (dto.notes !== undefined) {
+            data.notes = dto.notes?.trim() ? dto.notes.trim() : null;
+        }
+
+        if (
+            typeof dto.remainingReviews !== "number" &&
+            typeof dto.isActive !== "boolean" &&
+            dto.notes === undefined
+        ) {
+            throw new Error("No hay cambios para aplicar.");
+        }
+
+        try {
+            return await prisma.reviewEmailAccess.update({
+                where: { id },
+                data,
+                select: {
+                    id: true,
+                    email: true,
+                    remainingReviews: true,
+                    usedReviews: true,
+                    isActive: true,
+                    notes: true,
+                    enabledBy: true,
+                    updatedBy: true,
+                    lastUsedAt: true,
+                    createdAt: true,
+                    updatedAt: true,
+                },
+            });
+        } catch (error) {
+            if (
+                error instanceof Prisma.PrismaClientKnownRequestError &&
+                error.code === "P2025"
+            ) {
+                throw new Error("No encontramos la habilitación solicitada.");
+            }
+            throw error;
         }
     }
 

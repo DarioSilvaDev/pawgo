@@ -100,4 +100,35 @@ export async function reviewRoutes(
         { preHandler: authenticate },
         controller.toggleFeatured
     );
+
+    /**
+     * POST /api/admin/reviews/email-access
+     * Upsert quota for email-based reviews without orders.
+     * Body: { email: string, remainingReviews: number, notes?: string }
+     */
+    fastify.post(
+        "/admin/reviews/email-access",
+        { preHandler: authenticate },
+        controller.upsertReviewEmailAccess
+    );
+
+    /**
+     * GET /api/admin/reviews/email-access
+     * List quota rows for admin dashboard.
+     */
+    fastify.get(
+        "/admin/reviews/email-access",
+        { preHandler: authenticate },
+        controller.getReviewEmailAccessList
+    );
+
+    /**
+     * PATCH /api/admin/reviews/email-access/:id
+     * Update quota row (remainingReviews, isActive, notes).
+     */
+    fastify.patch(
+        "/admin/reviews/email-access/:id",
+        { preHandler: authenticate },
+        controller.updateReviewEmailAccess
+    );
 }

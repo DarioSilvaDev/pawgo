@@ -79,8 +79,8 @@ export class MonthlyWinnerService {
             include: { lead: true }
         });
 
-        if (!review || !review.lead) {
-            console.error(`[MonthlyWinnerService] Winner review or lead not found.`);
+        if (!review) {
+            console.error(`[MonthlyWinnerService] Winner review not found.`);
             return null;
         }
 
@@ -118,7 +118,7 @@ export class MonthlyWinnerService {
         const reviewImageUrl = review.imageUrl ? this.storageService.getPublicUrl(review.imageUrl) : '';
 
         await this.emailService.sendMonthlyWinnerNotification({
-            email: review.email || review.lead.email, // Use review email or lead email as fallback
+            email: review.email,
             petName: review.petName,
             couponCode: discountCode.code,
             monthName: DateTime.fromObject({ month }).setLocale("es").monthLong as string,

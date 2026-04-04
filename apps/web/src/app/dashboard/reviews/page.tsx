@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type FormEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,7 +14,7 @@ interface Review {
     comment: string;
     imageUrl: string | null;
     email: string;
-    orderId: string;
+    orderId: string | null;
     status: "pending" | "approved" | "rejected";
     isApproved: boolean;
     isFeatured: boolean;
@@ -25,6 +25,17 @@ interface Review {
     createdAt: string;
     approvedAt: string | null;
     rejectedAt: string | null;
+}
+
+interface ReviewEmailAccess {
+    id: string;
+    email: string;
+    remainingReviews: number;
+    usedReviews: number;
+    isActive: boolean;
+    notes: string | null;
+    updatedAt: string;
+    lastUsedAt: string | null;
 }
 
 function StarDisplay({ value }: { value: number }) {
@@ -53,6 +64,12 @@ export default function AdminReviewsPage() {
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState<"" | "pending" | "approved" | "rejected">("");
     const [total, setTotal] = useState(0);
+    const [emailAccessRows, setEmailAccessRows] = useState<ReviewEmailAccess[]>([]);
+    const [loadingEmailAccess, setLoadingEmailAccess] = useState(true);
+    const [savingEmailAccess, setSavingEmailAccess] = useState(false);
+    const [quotaEmail, setQuotaEmail] = useState("");
+    const [quotaValue, setQuotaValue] = useState("1");
+    const [quotaNotes, setQuotaNotes] = useState("");
 
     // Moderation modal state
     const [moderatingId, setModeratingId] = useState<string | null>(null);
@@ -79,9 +96,28 @@ export default function AdminReviewsPage() {
         }
     }, [statusFilter, router]);
 
+    const fetchEmailAccess = useCallback(async () => {
+        setLoadingEmailAccess(true);
+        try {
+            const res = await fetchAPI("/admin/reviews/email-access?limit=50");
+            if (res.status === 401 || res.status === 403) {
+                router.push("/login");
+                return;
+            }
+            const data = await res.json();
+            setEmailAccessRows(data.data ?? []);
+        } finally {
+            setLoadingEmailAccess(false);
+        }
+    }, [router]);
+
     useEffect(() => {
         fetchReviews();
     }, [fetchReviews]);
+
+    useEffect(() => {
+        fetchEmailAccess();
+    }, [fetchEmailAccess]);
 
     async function handleModerate() {
         if (!moderatingId) return;
@@ -119,6 +155,93 @@ export default function AdminReviewsPage() {
             body: JSON.stringify({ isFeatured: !current }),
         });
         fetchReviews();
+    }
+
+    async function handleUpsertEmailAccess(e: FormEvent) {
+        e.preventDefault();
+
+        const normalizedEmail = quotaEmail.trim().toLowerCase();
+        if (!normalizedEmail) {
+            alert("Ingresá un email.");
+            return;
+        }
+
+        const quota = Number.parseInt(quotaValue, 10);
+        if (!Number.isInteger(quota) || quota < 0) {
+            alert("La cantidad de cupos debe ser un entero mayor o igual a 0.");
+            return;
+        }
+
+        setSavingEmailAccess(true);
+        try {
+            const res = await fetchAPI("/admin/reviews/email-access", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: normalizedEmail,
+                    remainingReviews: quota,
+                    notes: quotaNotes.trim() || undefined,
+                }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                alert(err.error ?? "No se pudo guardar la habilitación.");
+                return;
+            }
+
+            setQuotaEmail("");
+            setQuotaValue("1");
+            setQuotaNotes("");
+            await fetchEmailAccess();
+        } finally {
+            setSavingEmailAccess(false);
+        }
+    }
+
+    async function handleEditQuota(access: ReviewEmailAccess) {
+        const raw = window.prompt(
+            `Ingresá los nuevos cupos restantes para ${access.email}:`,
+            String(access.remainingReviews)
+        );
+
+        if (raw === null) return;
+
+        const nextQuota = Number.parseInt(raw, 10);
+        if (!Number.isInteger(nextQuota) || nextQuota < 0) {
+            alert("La cantidad de cupos debe ser un entero mayor o igual a 0.");
+            return;
+        }
+
+        const res = await fetchAPI(`/admin/reviews/email-access/${access.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ remainingReviews: nextQuota }),
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            alert(err.error ?? "No se pudo actualizar el cupo.");
+            return;
+        }
+
+        await fetchEmailAccess();
+    }
+
+    async function handleToggleEmailAccess(access: ReviewEmailAccess) {
+        const res = await fetchAPI(`/admin/reviews/email-access/${access.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ isActive: !access.isActive }),
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            alert(err.error ?? "No se pudo actualizar el estado.");
+            return;
+        }
+
+        await fetchEmailAccess();
     }
 
     const pendingCount = reviews.filter((r) => r.status === "pending").length;
@@ -167,6 +290,104 @@ export default function AdminReviewsPage() {
                                 {f === "" ? "Todas" : STATUS_LABELS[f].label}
                             </button>
                         ))}
+                    </div>
+
+                    <div className="mb-8 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                        <h2 className="text-lg font-bold text-gray-900 mb-1">Habilitación por email (sin orden)</h2>
+                        <p className="text-sm text-gray-500 mb-4">
+                            Configurá cuántas reseñas puede enviar un cliente sin compra detectada.
+                        </p>
+
+                        <form onSubmit={handleUpsertEmailAccess} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                            <input
+                                type="email"
+                                placeholder="cliente@email.com"
+                                value={quotaEmail}
+                                onChange={(e) => setQuotaEmail(e.target.value)}
+                                className="md:col-span-2 px-3 py-2 border border-gray-300 rounded-xl text-sm"
+                                required
+                            />
+                            <input
+                                type="number"
+                                min={0}
+                                step={1}
+                                placeholder="Cupos"
+                                value={quotaValue}
+                                onChange={(e) => setQuotaValue(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-xl text-sm"
+                                required
+                            />
+                            <button
+                                type="submit"
+                                disabled={savingEmailAccess}
+                                className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-60"
+                            >
+                                {savingEmailAccess ? "Guardando..." : "Guardar cupos"}
+                            </button>
+                            <input
+                                type="text"
+                                placeholder="Nota interna (opcional)"
+                                value={quotaNotes}
+                                onChange={(e) => setQuotaNotes(e.target.value)}
+                                className="md:col-span-4 px-3 py-2 border border-gray-300 rounded-xl text-sm"
+                            />
+                        </form>
+
+                        {loadingEmailAccess ? (
+                            <p className="text-sm text-gray-500">Cargando habilitaciones...</p>
+                        ) : emailAccessRows.length === 0 ? (
+                            <p className="text-sm text-gray-500">Todavía no hay emails habilitados.</p>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full text-sm">
+                                    <thead>
+                                        <tr className="text-left text-gray-500 border-b border-gray-100">
+                                            <th className="py-2 pr-4">Email</th>
+                                            <th className="py-2 pr-4">Disponibles</th>
+                                            <th className="py-2 pr-4">Usadas</th>
+                                            <th className="py-2 pr-4">Estado</th>
+                                            <th className="py-2 pr-4">Último uso</th>
+                                            <th className="py-2 pr-4">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {emailAccessRows.map((access) => (
+                                            <tr key={access.id} className="border-b border-gray-50">
+                                                <td className="py-2 pr-4 text-gray-700">{access.email}</td>
+                                                <td className="py-2 pr-4 font-semibold text-teal-700">{access.remainingReviews}</td>
+                                                <td className="py-2 pr-4 text-gray-600">{access.usedReviews}</td>
+                                                <td className="py-2 pr-4">
+                                                    <span className={`text-xs px-2 py-1 rounded-full ${access.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
+                                                        {access.isActive ? "Activa" : "Pausada"}
+                                                    </span>
+                                                </td>
+                                                <td className="py-2 pr-4 text-gray-500">
+                                                    {access.lastUsedAt ? new Date(access.lastUsedAt).toLocaleDateString("es-AR") : "-"}
+                                                </td>
+                                                <td className="py-2 pr-4">
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleEditQuota(access)}
+                                                            className="text-xs px-2 py-1 rounded-lg bg-sky-100 text-sky-700 hover:bg-sky-200"
+                                                        >
+                                                            Editar cupos
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleToggleEmailAccess(access)}
+                                                            className={`text-xs px-2 py-1 rounded-lg ${access.isActive ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"}`}
+                                                        >
+                                                            {access.isActive ? "Pausar" : "Reactivar"}
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
 
                     {/* Reviews grid */}
@@ -245,7 +466,9 @@ export default function AdminReviewsPage() {
 
                                         {/* Meta */}
                                         <div className="mt-3 pt-3 border-t border-gray-50 text-xs text-gray-400 space-y-0.5">
-                                            <p>📦 Orden: {review.orderId.slice(0, 12)}…</p>
+                                            <p>
+                                                📦 Orden: {review.orderId ? `${review.orderId.slice(0, 12)}…` : "Sin orden (habilitación manual)"}
+                                            </p>
                                             <p>📅 {new Date(review.createdAt).toLocaleDateString("es-AR")}</p>
                                             {review.submittedFrom && <p>📍 {review.submittedFrom}</p>}
                                         </div>

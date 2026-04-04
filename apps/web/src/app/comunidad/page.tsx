@@ -141,6 +141,8 @@ function ComunidadPageContent() {
     const [validatingEmail, setValidatingEmail] = useState(false);
     const [emailError, setEmailError] = useState("");
     const [orderId, setOrderId] = useState("");
+    const [reviewAccessType, setReviewAccessType] = useState<"purchase" | "admin_email" | null>(null);
+    const [remainingReviews, setRemainingReviews] = useState<number | null>(null);
     const [existingReviewStatus, setExistingReviewStatus] = useState("");
 
     // Step 2 — Form
@@ -164,6 +166,9 @@ function ComunidadPageContent() {
     const closeModal = () => {
         setStep("gallery");
         setEmailError("");
+        setOrderId("");
+        setReviewAccessType(null);
+        setRemainingReviews(null);
     };
 
     // Load reviews and ranking on mount
@@ -256,13 +261,18 @@ function ComunidadPageContent() {
             });
             const data = await res.json();
             if (data.canReview) {
-                setOrderId(data.orderId);
+                setOrderId(data.orderId ?? "");
+                setReviewAccessType(data.accessType ?? (data.orderId ? "purchase" : "admin_email"));
+                setRemainingReviews(typeof data.remainingReviews === "number" ? data.remainingReviews : null);
                 setStep("form");
                 setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
             } else if (data.reason === "already_reviewed") {
                 setExistingReviewStatus(data.reviewStatus ?? "");
                 setStep("already_reviewed");
             } else {
+                setOrderId("");
+                setReviewAccessType(null);
+                setRemainingReviews(null);
                 setStep("no_purchase");
             }
         } catch {
@@ -283,7 +293,9 @@ function ComunidadPageContent() {
         try {
             const formData = new FormData();
             formData.append("email", email);
-            formData.append("orderId", orderId);
+            if (orderId) {
+                formData.append("orderId", orderId);
+            }
             formData.append("petName", petName);
             formData.append("rating", String(rating));
             formData.append("comment", comment);
@@ -434,9 +446,9 @@ function ComunidadPageContent() {
                         {step === "no_purchase" && (
                             <div className="text-center py-4">
                                 <div className="text-5xl mb-4">🔍</div>
-                                <h2 className="text-xl font-bold text-gray-800 mb-2">No encontramos tu compra</h2>
+                                <h2 className="text-xl font-bold text-gray-800 mb-2">No encontramos una compra ni habilitación activa</h2>
                                 <p className="text-gray-500 mb-6">
-                                    No hay una compra asociada a <strong>{email}</strong>. ¿Usaste otro email?
+                                    No encontramos una compra enviada ni cupos disponibles para <strong>{email}</strong>. ¿Usaste otro email?
                                 </p>
                                 <div className="space-y-3">
                                     <button onClick={() => { setEmail(""); setStep("email"); }} className="btn-primary w-full">
@@ -487,14 +499,27 @@ function ComunidadPageContent() {
             {step === "form" && (
                 <section className="max-w-xl mx-auto px-4 py-12" ref={formRef}>
                     <div className="bg-white rounded-3xl shadow-xl p-8">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                                <svg className="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                </svg>
+                        {reviewAccessType === "purchase" ? (
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                                    <svg className="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                    </svg>
+                                </div>
+                                <p className="text-sm text-emerald-700 font-medium">¡Tu compra está verificada!</p>
                             </div>
-                            <p className="text-sm text-emerald-700 font-medium">¡Tu compra está verificada!</p>
-                        </div>
+                        ) : (
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center">
+                                    <svg className="w-4 h-4 text-sky-600" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                </div>
+                                <p className="text-sm text-sky-700 font-medium">
+                                    Email habilitado por el equipo PawGo{remainingReviews !== null ? ` · ${remainingReviews} cupo${remainingReviews === 1 ? "" : "s"} antes de enviar` : ""}
+                                </p>
+                            </div>
+                        )}
                         <h2 className="text-2xl font-bold text-gray-800 mb-6">Contanos la experiencia 🐾</h2>
 
                         <form onSubmit={handleSubmitReview} className="space-y-6">
