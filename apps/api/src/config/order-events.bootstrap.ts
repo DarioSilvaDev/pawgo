@@ -12,6 +12,7 @@
 import { PgBoss } from "pg-boss";
 import { eventDispatcher } from "../services/event-dispatcher.service.js";
 import { emailService } from "../services/email.service.js";
+import { getAdminNotificationEmails } from "./envs.js";
 import {
     OrderEventType,
     type DomainEvent,
@@ -43,6 +44,34 @@ export function bootstrapOrderEvents(boss: PgBoss): void {
                 orderId,
                 total: amount,
                 currency: currency ?? "ARS",
+            });
+
+            const adminEmails = getAdminNotificationEmails();
+            if (adminEmails.length === 0) {
+                return;
+            }
+
+            const adminNotificationResults = await Promise.allSettled(
+                adminEmails.map((adminEmail) =>
+                    emailService.sendPurchaseApprovedAdminNotificationIdempotent({
+                        idempotencyKey: `ADMIN_PURCHASE_APPROVED:${orderId}:${adminEmail}`,
+                        to: adminEmail,
+                        orderId,
+                        customerEmail: leadEmail,
+                        customerName: leadName ?? "Cliente",
+                        total: amount,
+                        currency: currency ?? "ARS",
+                    })
+                )
+            );
+
+            adminNotificationResults.forEach((result, index) => {
+                if (result.status === "rejected") {
+                    console.warn(
+                        `[EventBootstrap] PAYMENT_APPROVED: failed admin notification for ${adminEmails[index]}`,
+                        result.reason
+                    );
+                }
             });
         }
     );

@@ -1,18 +1,11 @@
 import { PgBoss, Job } from "pg-boss";
 import { PrismaClient } from "@prisma/client";
 import { emailService } from "../services/email.service.js";
+import { getAdminNotificationEmails } from "../config/envs.js";
 import { d } from "../utils/decimal.js";
 import { JOB_DISCOUNT_CODE_SETTLE } from "./discount-code-expiration.scan.js";
 
 const prisma = new PrismaClient();
-
-function getAdminEmails(): string[] {
-  const raw = process.env.ADMIN_NOTIFICATION_EMAILS || "";
-  return raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
 
 export async function registerDiscountCodeSettlementWorker(boss: PgBoss) {
   const concurrency = Number(
@@ -144,7 +137,7 @@ export async function registerDiscountCodeSettlementWorker(boss: PgBoss) {
             };
           });
 
-          const admins = getAdminEmails();
+          const admins = getAdminNotificationEmails();
           if (admins.length > 0 && result.status === "settled") {
             await emailService.sendDiscountCodeSettlementAdminNotification({
               to: admins,

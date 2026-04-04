@@ -31,6 +31,7 @@ interface IEnvVars {
     MICORREO_USERNAME: string;
     MICORREO_PASSWORD: string;
     MICORREO_TOKEN_CACHE_ENABLED: string;
+    ADMIN_NOTIFICATION_EMAILS: string;
 }
 // Schema de validación de variables de entorno
 const envsSchema = z
@@ -96,6 +97,11 @@ const envsSchema = z
         MICORREO_USERNAME: z.string().min(1).describe("El usuario para autenticación en MiCorreo"),
         MICORREO_PASSWORD: z.string().min(1).describe("La contraseña para autenticación en MiCorreo"),
         MICORREO_TOKEN_CACHE_ENABLED: z.string().default("true").describe("Habilitar cache de tokens JWT de MiCorreo"),
+
+        // Notificaciones admin
+        ADMIN_NOTIFICATION_EMAILS: z
+            .string()
+            .describe("Lista de emails admin (separados por coma) para notificaciones internas"),
     })
     .passthrough(); // Permite propiedades adicionales (variables de entorno del sistema)
 
@@ -122,6 +128,20 @@ function validateEnv() {
 
 // Validar variables de entorno al importar el módulo
 export const envs = validateEnv();
+
+export function getAdminNotificationEmails(raw: string | undefined = envs.ADMIN_NOTIFICATION_EMAILS): string[] {
+    if (!raw) return [];
+
+    const unique = new Set<string>();
+    for (const email of raw.split(",").map((s) => s.trim()).filter(Boolean)) {
+        const key = email.toLowerCase();
+        if (!unique.has(key)) {
+            unique.add(key);
+        }
+    }
+
+    return Array.from(unique);
+}
 
 // Exportar tipo inferido del schema
 export type EnvVars = z.infer<typeof envsSchema>;

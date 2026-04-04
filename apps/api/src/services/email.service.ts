@@ -902,6 +902,89 @@ export class EmailService {
   }
 
   /**
+   * Notify admins when a purchase is approved
+   */
+  async sendPurchaseApprovedAdminNotification(params: {
+    to: string;
+    orderId: string;
+    customerEmail?: string;
+    customerName?: string;
+    total: number;
+    currency: string;
+  }): Promise<void> {
+    const orderShortId = params.orderId.slice(0, 8).toUpperCase();
+    const customerLabel = params.customerName?.trim() || "Cliente";
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 700px; margin: 0 auto; padding: 20px; }
+            .content { background-color: #f9f9f9; padding: 24px; border-radius: 8px; }
+            .box { background: white; border: 1px solid #e5e7eb; padding: 16px; border-radius: 8px; }
+            .k { color: #6b7280; font-size: 12px; }
+            .v { font-weight: 600; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            ${getEmailHeader()}
+            <div class="content">
+              <h2>Nueva compra confirmada</h2>
+              <p>Se acredito un pago y la orden paso a estado <strong>paid</strong>.</p>
+              <div class="box">
+                <p><span class="k">Orden:</span> <span class="v">${params.orderId}</span></p>
+                <p><span class="k">Referencia corta:</span> <span class="v">#${orderShortId}</span></p>
+                <p><span class="k">Cliente:</span> <span class="v">${customerLabel}</span></p>
+                ${params.customerEmail ? `<p><span class="k">Email cliente:</span> <span class="v">${params.customerEmail}</span></p>` : ""}
+                <p><span class="k">Total:</span> <span class="v">${params.currency} ${params.total.toLocaleString("es-AR")}</span></p>
+              </div>
+              <p style="margin-top: 16px;">Este email es informativo (no requiere accion).</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendViaResend({
+      to: params.to,
+      subject: `Compra confirmada #${orderShortId}`,
+      html,
+    });
+  }
+
+  /**
+   * Idempotent admin notification for purchase approved
+   */
+  async sendPurchaseApprovedAdminNotificationIdempotent(params: {
+    idempotencyKey: string;
+    to: string;
+    orderId: string;
+    customerEmail?: string;
+    customerName?: string;
+    total: number;
+    currency: string;
+  }): Promise<void> {
+    await this.sendIdempotent(
+      params.idempotencyKey,
+      "ADMIN_PURCHASE_APPROVED",
+      params.to,
+      () =>
+        this.sendPurchaseApprovedAdminNotification({
+          to: params.to,
+          orderId: params.orderId,
+          customerEmail: params.customerEmail,
+          customerName: params.customerName,
+          total: params.total,
+          currency: params.currency,
+        })
+    );
+  }
+
+  /**
    * Notify admins when an expired discount code has been processed (settled)
    */
   async sendDiscountCodeSettlementAdminNotification(params: {
