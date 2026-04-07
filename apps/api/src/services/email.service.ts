@@ -1329,6 +1329,78 @@ export class EmailService {
   }
 
   /**
+   * Notify customer that their email was enabled to leave a review without order.
+   */
+  async sendReviewAccessEnabledNotification(
+    email: string,
+    remainingReviews: number
+  ): Promise<void> {
+    const communityUrl = `${FRONTEND_URL}/comunidad`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .header img { max-width: 200px; height: auto; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+            .highlight-box { background-color: #e7f3ff; border-left: 4px solid #00CED1; padding: 16px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+            .button { display: inline-block; padding: 14px 32px; background-color: #00CED1; color: white !important; text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: bold; font-size: 16px; }
+            .footer { text-align: center; margin-top: 24px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            ${getEmailHeader()}
+            <div class="content">
+              <h2>🐾 ¡Ya podés cargar tu reseña en PawGo!</h2>
+              <p>Habilitamos tu email para que compartas tu experiencia en la comunidad.</p>
+              <div class="highlight-box">
+                <p style="margin: 0;"><strong>Tenés ${remainingReviews} cupo${remainingReviews === 1 ? "" : "s"} disponible${remainingReviews === 1 ? "" : "s"} para reseñas.</strong></p>
+              </div>
+              <p>Cuando quieras, ingresá a la sección Comunidad y completá tu reseña.</p>
+              <div style="text-align: center;">
+                <a href="${communityUrl}" class="button">Ir a /comunidad</a>
+              </div>
+              <p style="font-size: 13px; color: #777;">Si el botón no funciona, copiá y pegá este enlace en tu navegador: ${communityUrl}</p>
+              <p><strong>El equipo de PawGo</strong> 💙</p>
+            </div>
+            <div class="footer">
+              <p>© 2026 PawGo. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendViaResend({
+      to: email,
+      subject: "🐾 Ya podés cargar tu reseña en PawGo",
+      html,
+    });
+  }
+
+  /**
+   * Idempotent notification for review access enabled without order.
+   */
+  async sendReviewAccessEnabledNotificationIdempotent(params: {
+    idempotencyKey: string;
+    email: string;
+    remainingReviews: number;
+  }): Promise<void> {
+    await this.sendIdempotent(
+      params.idempotencyKey,
+      "REVIEW_ACCESS_ENABLED",
+      params.email,
+      () => this.sendReviewAccessEnabledNotification(params.email, params.remainingReviews)
+    );
+  }
+
+  /**
    * Send 7-day post-delivery reminder to leave a review
    * Triggered by a background job 7 days after order status = 'delivered'
    */

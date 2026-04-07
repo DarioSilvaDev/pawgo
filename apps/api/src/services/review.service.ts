@@ -386,7 +386,14 @@ export class ReviewService {
         const normalizedEmail = dto.email.toLowerCase().trim();
         const notes = dto.notes?.trim() ? dto.notes.trim() : null;
 
-        return prisma.reviewEmailAccess.upsert({
+        const existingAccess = await prisma.reviewEmailAccess.findUnique({
+            where: { email: normalizedEmail },
+            select: { id: true },
+        });
+
+        const isNewAccess = !existingAccess;
+
+        const access = await prisma.reviewEmailAccess.upsert({
             where: { email: normalizedEmail },
             update: {
                 remainingReviews: dto.remainingReviews,
@@ -416,6 +423,23 @@ export class ReviewService {
                 updatedAt: true,
             },
         });
+
+        if (isNewAccess && access.isActive && access.remainingReviews > 0) {
+            try {
+                await this.emailService.sendReviewAccessEnabledNotificationIdempotent({
+                    idempotencyKey: `REVIEW_ACCESS_ENABLED:${normalizedEmail}`,
+                    email: normalizedEmail,
+                    remainingReviews: access.remainingReviews,
+                });
+            } catch (error) {
+                console.warn(
+                    `[ReviewService] Failed to send review access enabled email to ${normalizedEmail}:`,
+                    error
+                );
+            }
+        }
+
+        return access;
     }
 
     async getReviewEmailAccessList(query: {
