@@ -8,6 +8,7 @@ import { CheckoutStepper } from "@/components/checkout/CheckoutStepper";
 import { ProductSelection } from "@/components/checkout/ProductSelection";
 import { DiscountCodeInput } from "@/components/checkout/DiscountCodeInput";
 import { OrderSummary } from "@/components/checkout/OrderSummary";
+import { InstallmentsMessage } from "@/components/checkout/InstallmentsMessage";
 import { ShippingAddressForm, ShippingAddress } from "@/components/checkout/ShippingAddressForm";
 import { CustomerInfoForm } from "@/components/checkout/CustomerInfoForm";
 import { CustomerInfo } from "@/lib/order";
@@ -441,6 +442,8 @@ export default function CheckoutPage() {
                         Una vez completado el pago, serás redirigido de vuelta a nuestro sitio.
                       </p>
                     </div>
+
+                    <InstallmentsMessage totalAmount={orderData.total} className="mt-2" />
                   </div>
                 </div>
               </div>
@@ -537,6 +540,11 @@ export default function CheckoutPage() {
                   minimumFractionDigits: 0,
                 }).format(orderData.total)}
               </span>
+              <InstallmentsMessage
+                totalAmount={orderData.total}
+                variant="inline"
+                className="mt-1"
+              />
             </div>
             <button
               onClick={handleNext}
@@ -550,7 +558,7 @@ export default function CheckoutPage() {
       )}
 
       {/* Add padding to bottom when sticky is present */}
-      {currentStep === 1 && <div className="h-24 sm:hidden" />}
+      {currentStep === 1 && <div className="h-28 sm:hidden" />}
     </div>
   );
 }

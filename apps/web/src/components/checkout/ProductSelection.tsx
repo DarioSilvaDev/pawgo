@@ -4,9 +4,14 @@ import { useState } from "react";
 import Image from "next/image";
 import { Product, ProductVariant } from "@/lib/product";
 import { getPriceDisplay, formatPrice } from "@/lib/pricing";
+import { InstallmentsMessage } from "@/components/checkout/InstallmentsMessage";
 
 // Estructura: Map<productId, Map<variantId, quantity>>
 type SelectedProducts = Map<string, Map<string, number>>;
+
+type DescriptionBlock =
+  | { type: "paragraph"; content: string }
+  | { type: "list"; items: string[] };
 
 interface ProductSelectionProps {
   products: Product[];
@@ -39,35 +44,118 @@ export function ProductSelection({
     });
   };
 
-  const renderDescription = (text: string) => {
+  const parseDescriptionBlocks = (text: string): DescriptionBlock[] => {
+    const blocks: DescriptionBlock[] = [];
+    const lines = text.split("\n");
+    const bulletRegex = /^(\*|-|•|✓|✔)\s*/;
+    let currentList: string[] = [];
+
+    const flushList = () => {
+      if (currentList.length > 0) {
+        blocks.push({ type: "list", items: currentList });
+        currentList = [];
+      }
+    };
+
+    lines.forEach((rawLine) => {
+      const line = rawLine.trim();
+
+      if (!line) {
+        flushList();
+        return;
+      }
+
+      if (bulletRegex.test(line)) {
+        currentList.push(line.replace(bulletRegex, "").trim());
+        return;
+      }
+
+      flushList();
+      blocks.push({ type: "paragraph", content: line });
+    });
+
+    flushList();
+    return blocks;
+  };
+
+  const renderInlineText = (text: string) => {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+
+    return parts.map((part, index) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return (
+          <strong key={index} className="font-semibold text-text-black">
+            {part.slice(2, -2)}
+          </strong>
+        );
+      }
+
+      return <span key={index}>{part}</span>;
+    });
+  };
+
+  const renderDescription = (text: string, isExpanded: boolean) => {
     if (!text) return null;
 
-    return text.split('\n').map((line, i) => {
-      // Bold detection: **text**
-      const parts = line.split(/(\*\*.*?\*\*)/g);
+    const blocks = parseDescriptionBlocks(text);
+    const firstParagraph = blocks.find(
+      (
+        block
+      ): block is Extract<DescriptionBlock, { type: "paragraph" }> =>
+        block.type === "paragraph"
+    );
+    const firstList = blocks.find(
+      (block): block is Extract<DescriptionBlock, { type: "list" }> =>
+        block.type === "list"
+    );
+
+    if (!isExpanded) {
       return (
-        <span key={i} className="block min-h-[0.5rem]">
-          {parts.map((part, index) => {
-            if (part.startsWith('**') && part.endsWith('**')) {
-              return (
-                <strong key={index} className="text-text-black font-bold">
-                  {part.slice(2, -2)}
-                </strong>
-              );
-            }
-            // Highlight checkmarks or bullets
-            if (part.trim().startsWith('✓') || part.trim().startsWith('✔')) {
-              return (
-                <span key={index} className="text-primary-turquoise font-bold">
-                  {part}
-                </span>
-              );
-            }
-            return part;
-          })}
-        </span>
+        <div className="space-y-2.5">
+          {firstParagraph && (
+            <p className="text-sm text-slate-700 leading-relaxed line-clamp-4">
+              {renderInlineText(firstParagraph.content)}
+            </p>
+          )}
+
+          {firstList && firstList.items.length > 0 && (
+            <ul className="space-y-1.5">
+              {firstList.items.slice(0, 3).map((item, index) => (
+                <li key={index} className="flex items-start gap-2 text-sm text-slate-700 leading-relaxed">
+                  <span className="mt-1 text-primary-turquoise font-bold">✓</span>
+                  <span>{renderInlineText(item)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       );
-    });
+    }
+
+    return (
+      <div className="space-y-3">
+        {blocks.map((block, blockIndex) => {
+          if (block.type === "paragraph") {
+            return (
+              <p key={blockIndex} className="text-sm text-slate-700 leading-relaxed">
+                {renderInlineText(block.content)}
+              </p>
+            );
+          }
+
+          return (
+            <ul key={blockIndex} className="space-y-2">
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex} className="flex items-start gap-2 text-sm text-slate-700 leading-relaxed">
+                  <span className="mt-1 text-primary-turquoise font-bold">✓</span>
+                  <span>{renderInlineText(item)}</span>
+                </li>
+              ))}
+            </ul>
+          );
+        })}
+      </div>
+    );
   };
 
   const activeProducts = products.filter((p) => p.isActive);
@@ -95,25 +183,25 @@ export function ProductSelection({
         const priceInfo = getPriceDisplay(product, firstVariant);
 
         return (
-          <div
-            key={product.id}
-            className="flex flex-col gap-4"
-          >
-            {/* Main Product Card */}
-            <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-              <div className="flex gap-4">
-                {/* Product Image - Smaller on mobile */}
-                <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0">
-                  <div className="relative w-full h-full rounded-md overflow-hidden bg-gray-50 border border-gray-100">
-                    {product.images && product.images.length > 0 ? (
-                      <Image
-                        src="/images/ejemplo-removebg-preview.png"
-                        alt={product.name}
-                        fill
-                        className="object-contain"
-                        sizes="(max-width: 768px) 96px, 128px"
-                      />
-                    ) : (
+            <div
+              key={product.id}
+              className="flex flex-col gap-4"
+            >
+              {/* Main Product Card */}
+              <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-200">
+                <div className="flex gap-3 md:gap-4">
+                  {/* Product Image - Smaller on mobile */}
+                  <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0">
+                    <div className="relative w-full h-full rounded-lg overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200">
+                      {product.images && product.images.length > 0 ? (
+                        <Image
+                          src="/images/ejemplo-removebg-preview.png"
+                          alt={product.name}
+                          fill
+                          className="object-contain p-1"
+                          sizes="(max-width: 768px) 96px, 128px"
+                        />
+                      ) : (
                       <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
                         Sin imagen
                       </div>
@@ -123,39 +211,46 @@ export function ProductSelection({
 
                 {/* Product Info & Unified Price */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-base md:text-lg font-bold text-text-black mb-1 truncate">
+                  <h3 className="text-base md:text-lg font-bold text-text-black leading-snug line-clamp-2">
                     {product.name}
                   </h3>
 
                   {/* Price Section */}
-                  <div className="flex flex-col mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl md:text-2xl font-bold text-text-black">
+                  <div className="mt-2 mb-3">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-3xl leading-none font-black tracking-tight text-text-black">
                         {formatPrice(priceInfo.effectivePrice, product.currency)}
                       </span>
                       {priceInfo.originalPrice != null && (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm text-gray-400 line-through">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base text-gray-400 line-through">
                             {formatPrice(priceInfo.originalPrice, product.currency)}
                           </span>
-                          <span className="text-sm font-semibold text-green-600">
+                          <span className="text-base font-bold text-emerald-600">
                             {Math.round((1 - priceInfo.effectivePrice / priceInfo.originalPrice) * 100)}% OFF
                           </span>
                         </div>
                       )}
                     </div>
                     {priceInfo.showLaunchBadge && (
-                      <span className="inline-flex mt-1 text-[10px] uppercase font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded w-fit">
+                      <span className="inline-flex mt-1 text-[10px] uppercase font-bold tracking-wide text-amber-700 bg-amber-100 px-2 py-1 rounded-full w-fit">
                         🚀 Lanzamiento
                       </span>
                     )}
                   </div>
 
+                  <InstallmentsMessage
+                    totalAmount={priceInfo.effectivePrice}
+                    currency={product.currency}
+                    variant="compact"
+                    className="mb-3"
+                  />
+
                   <div className="relative">
-                    <div className={`text-xs md:text-sm text-text-dark-gray transition-all leading-relaxed ${expandedProducts.has(product.id) ? "" : "line-clamp-3 md:line-clamp-4"
-                      }`}>
-                      {renderDescription(product.description)}
-                    </div>
+                    {renderDescription(
+                      product.description,
+                      expandedProducts.has(product.id)
+                    )}
                     {product.description && product.description.length > 100 && (
                       <button
                         type="button"
@@ -165,7 +260,7 @@ export function ProductSelection({
                         {expandedProducts.has(product.id) ? (
                           <>Ver menos <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg></>
                         ) : (
-                          <>Ver más detalles <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></>
+                          <>Ver detalles técnicos <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></>
                         )}
                       </button>
                     )}

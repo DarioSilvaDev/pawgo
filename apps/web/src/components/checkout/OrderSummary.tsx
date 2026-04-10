@@ -2,6 +2,7 @@
 
 import { Product, ProductVariant } from "@/lib/product";
 import { getPriceDisplay, formatPrice } from "@/lib/pricing";
+import { InstallmentsMessage } from "@/components/checkout/InstallmentsMessage";
 
 interface OrderItem {
   product: Product;
@@ -26,6 +27,8 @@ export function OrderSummary({
   total,
   currency = "ARS",
 }: OrderSummaryProps) {
+  const hasSelectedItems = items.length > 0;
+
   return (
     <div className="bg-white rounded-lg shadow-md p-4 md:p-6 border border-gray-200 lg:sticky lg:top-4">
       <h3 className="text-lg md:text-xl font-semibold text-text-black mb-4">
@@ -82,30 +85,34 @@ export function OrderSummary({
 
       {/* Totals */}
       <div className="space-y-2 pt-4 border-t border-gray-200">
-        <div className="flex justify-between text-sm">
-          <span className="text-text-dark-gray">Subtotal:</span>
-          <span className="text-text-black font-medium">
-            ${subtotal.toLocaleString("es-AR")}
-          </span>
-        </div>
+        {!hasSelectedItems && (
+          <>
+            <div className="flex justify-between text-sm">
+              <span className="text-text-dark-gray">Subtotal:</span>
+              <span className="text-text-black font-medium">
+                ${subtotal.toLocaleString("es-AR")}
+              </span>
+            </div>
 
-        {discount > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-green-600">Descuento:</span>
-            <span className="text-green-600 font-medium">
-              -${discount.toLocaleString("es-AR")}
-            </span>
-          </div>
+            {discount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-green-600">Descuento:</span>
+                <span className="text-green-600 font-medium">
+                  -${discount.toLocaleString("es-AR")}
+                </span>
+              </div>
+            )}
+
+            <div className="flex justify-between text-sm">
+              <span className="text-text-dark-gray">Envío:</span>
+              <span className="text-text-black font-medium">
+                {shippingCost > 0
+                  ? `$${shippingCost.toLocaleString("es-AR")}`
+                  : "Gratis"}
+              </span>
+            </div>
+          </>
         )}
-
-        <div className="flex justify-between text-sm">
-          <span className="text-text-dark-gray">Envío:</span>
-          <span className="text-text-black font-medium">
-            {shippingCost > 0
-              ? `$${shippingCost.toLocaleString("es-AR")}`
-              : "Gratis"}
-          </span>
-        </div>
 
         <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-200">
           <span className="text-text-black">Total:</span>
@@ -113,6 +120,13 @@ export function OrderSummary({
             ${total.toLocaleString("es-AR")}
           </span>
         </div>
+
+        <InstallmentsMessage
+          totalAmount={total}
+          currency={currency}
+          variant={hasSelectedItems ? "inline" : "card"}
+          className="mt-3"
+        />
       </div>
     </div>
   );
