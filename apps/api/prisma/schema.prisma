@@ -76,6 +76,34 @@ enum DiscountCodeType {
   lead_reservation @map("lead_reservation")
 }
 
+enum FulfillmentType {
+  home_delivery @map("home_delivery")
+  pickup_point  @map("pickup_point")
+}
+
+enum PartnerReferralSourceType {
+  local_qr   @map("local_qr")
+  local_code @map("local_code")
+}
+
+enum PartnerCommissionStatus {
+  pending   @map("pending")
+  paid      @map("paid")
+  cancelled @map("cancelled")
+}
+
+enum PickupRequestStatus {
+  awaiting_stock @map("awaiting_stock")
+  ready_notified @map("ready_notified")
+  cancelled      @map("cancelled")
+}
+
+enum PartnerInventoryMovementType {
+  inbound_wholesale @map("inbound_wholesale")
+  outbound_sale     @map("outbound_sale")
+  adjustment        @map("adjustment")
+}
+
 enum InfluencerInvoiceStatus {
   pending  @map("pending")
   uploaded @map("uploaded")
@@ -300,6 +328,8 @@ model ProductVariant {
   product            Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
   orderItems         OrderItem[]
   stockReservations  StockReservation[]
+  partnerWholesaleSaleItems PartnerWholesaleSaleItem[]
+  partnerInventoryMovements PartnerInventoryMovement[]
 
   @@index([productId])
   @@index([sku])
@@ -335,6 +365,80 @@ model Influencer {
 
   @@index([createdAt])
   @@map("influencers")
+}
+
+model Partner {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+  notes        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  points             PartnerPoint[]
+  referralSources    PartnerReferralSource[]
+  attributions       OrderAttribution[]
+  commissions        PartnerCommission[]
+  wholesaleSales     PartnerWholesaleSale[]
+  inventoryMovements PartnerInventoryMovement[]
+
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("partners")
+}
+
+model PartnerPoint {
+  id           String   @id @default(cuid())
+  partnerId    String
+  name         String
+  city         String?
+  state        String?
+  address      Json?
+  isActive     Boolean  @default(true)
+  pickupEnabled Boolean @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  partner            Partner                 @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  referralSources    PartnerReferralSource[]
+  pickupRequests     PickupRequest[]
+  pickupOrders       Order[]                 @relation("OrderPickupPoint")
+  inventoryMovements PartnerInventoryMovement[]
+  attributions       OrderAttribution[]      @relation("AttributionPartnerPoint")
+
+  @@index([partnerId])
+  @@index([isActive])
+  @@index([pickupEnabled])
+  @@index([createdAt])
+  @@map("partner_points")
+}
+
+model PartnerReferralSource {
+  id            String                    @id @default(cuid())
+  partnerId     String
+  partnerPointId String?
+  sourceType    PartnerReferralSourceType @default(local_qr)
+  slug          String                    @unique
+  code          String?                   @unique
+  landingTarget String                    @default("checkout")
+  isActive      Boolean                   @default(true)
+  createdAt     DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime                  @updatedAt @db.Timestamptz(3)
+
+  partner       Partner                   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partnerPoint  PartnerPoint?             @relation(fields: [partnerPointId], references: [id], onDelete: SetNull)
+  attributions  OrderAttribution[]
+
+  @@index([partnerId])
+  @@index([partnerPointId])
+  @@index([isActive])
+  @@index([sourceType])
+  @@index([createdAt])
+  @@map("partner_referral_sources")
 }
 
 model DiscountCode {
@@ -394,6 +498,8 @@ model Order {
   id              String      @id @default(cuid())
   leadId          String?
   discountCodeId  String? // Código de descuento usado
+  fulfillmentType FulfillmentType @default(home_delivery)
+  pickupPointId   String?
   status          OrderStatus @default(awaiting_payment)
   subtotal        Decimal     @db.Decimal(10, 2) // Antes de descuento
   discount        Decimal     @default(0) @db.Decimal(10, 2) // Descuento aplicado
@@ -418,18 +524,46 @@ model Order {
 
   lead         Lead?         @relation(fields: [leadId], references: [id])
   discountCode DiscountCode? @relation(fields: [discountCodeId], references: [id])
+  pickupPoint  PartnerPoint? @relation("OrderPickupPoint", fields: [pickupPointId], references: [id], onDelete: SetNull)
   payments     Payment[]
   items        OrderItem[]
   commission   Commission?
+  attribution  OrderAttribution?
+  partnerCommission PartnerCommission?
+  pickupRequest PickupRequest?
   shipment     Shipment?
   eventLogs    OrderEventLog[]
   review       Review?
 
   @@index([discountCodeId])
   @@index([leadId])
+  @@index([pickupPointId])
+  @@index([fulfillmentType])
   @@index([status])
   @@index([createdAt])
   @@map("orders")
+}
+
+model OrderAttribution {
+  id               String   @id @default(cuid())
+  orderId          String   @unique
+  partnerId        String
+  referralSourceId String
+  partnerPointId   String?
+  attributionMethod String  @default("qr")
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+
+  order            Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  partner          Partner              @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  referralSource   PartnerReferralSource @relation(fields: [referralSourceId], references: [id], onDelete: Restrict)
+  partnerPoint     PartnerPoint?        @relation("AttributionPartnerPoint", fields: [partnerPointId], references: [id], onDelete: SetNull)
+  partnerCommission PartnerCommission?
+
+  @@index([partnerId])
+  @@index([referralSourceId])
+  @@index([partnerPointId])
+  @@index([createdAt])
+  @@map("order_attributions")
 }
 
 // Envíos (Correo Argentino)
@@ -566,6 +700,118 @@ model Commission {
   @@index([influencerPaymentId])
   @@index([createdAt])
   @@map("commissions")
+}
+
+model PartnerCommission {
+  id                String                  @id @default(cuid())
+  orderId           String                  @unique
+  partnerId         String
+  orderAttributionId String?                @unique
+  baseAmount        Decimal                 @db.Decimal(10, 2)
+  commissionRate    Decimal                 @db.Decimal(10, 2)
+  commissionAmount  Decimal                 @db.Decimal(10, 2)
+  status            PartnerCommissionStatus @default(pending)
+  paidAt            DateTime?               @db.Timestamptz(3)
+  cancelledAt       DateTime?               @db.Timestamptz(3)
+  createdAt         DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                @updatedAt @db.Timestamptz(3)
+
+  order             Order                   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  partner           Partner                 @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  orderAttribution  OrderAttribution?       @relation(fields: [orderAttributionId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("partner_commissions")
+}
+
+model PartnerWholesaleSale {
+  id             String   @id @default(cuid())
+  partnerId      String
+  soldAt         DateTime @default(now()) @db.Timestamptz(3)
+  invoiceNumber  String?
+  notes          String?
+  totalQuantity  Int      @default(0)
+  totalRevenue   Decimal  @db.Decimal(10, 2)
+  totalCost      Decimal  @db.Decimal(10, 2)
+  totalProfit    Decimal  @db.Decimal(10, 2)
+  createdByAuthId String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  partner            Partner                   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  items              PartnerWholesaleSaleItem[]
+  inventoryMovements PartnerInventoryMovement[]
+
+  @@index([partnerId])
+  @@index([soldAt])
+  @@index([createdAt])
+  @@map("partner_wholesale_sales")
+}
+
+model PartnerWholesaleSaleItem {
+  id                String   @id @default(cuid())
+  wholesaleSaleId   String
+  productVariantId  String
+  quantity          Int
+  unitWholesalePrice Decimal @db.Decimal(10, 2)
+  unitCost          Decimal  @db.Decimal(10, 2)
+  totalRevenue      Decimal  @db.Decimal(10, 2)
+  totalCost         Decimal  @db.Decimal(10, 2)
+  totalProfit       Decimal  @db.Decimal(10, 2)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  wholesaleSale     PartnerWholesaleSale @relation(fields: [wholesaleSaleId], references: [id], onDelete: Cascade)
+  productVariant    ProductVariant       @relation(fields: [productVariantId], references: [id], onDelete: Restrict)
+
+  @@index([wholesaleSaleId])
+  @@index([productVariantId])
+  @@map("partner_wholesale_sale_items")
+}
+
+model PartnerInventoryMovement {
+  id              String                       @id @default(cuid())
+  partnerId       String
+  partnerPointId  String?
+  wholesaleSaleId String?
+  productVariantId String
+  movementType    PartnerInventoryMovementType
+  quantity        Int
+  occurredAt      DateTime                     @default(now()) @db.Timestamptz(3)
+  notes           String?
+  createdAt       DateTime                     @default(now()) @db.Timestamptz(3)
+
+  partner         Partner                      @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partnerPoint    PartnerPoint?                @relation(fields: [partnerPointId], references: [id], onDelete: SetNull)
+  wholesaleSale   PartnerWholesaleSale?        @relation(fields: [wholesaleSaleId], references: [id], onDelete: SetNull)
+  productVariant  ProductVariant               @relation(fields: [productVariantId], references: [id], onDelete: Restrict)
+
+  @@index([partnerId])
+  @@index([partnerPointId])
+  @@index([wholesaleSaleId])
+  @@index([productVariantId])
+  @@index([occurredAt])
+  @@map("partner_inventory_movements")
+}
+
+model PickupRequest {
+  id            String            @id @default(cuid())
+  orderId       String            @unique
+  partnerPointId String
+  status        PickupRequestStatus @default(awaiting_stock)
+  readyAt       DateTime?         @db.Timestamptz(3)
+  notifiedAt    DateTime?         @db.Timestamptz(3)
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime          @updatedAt @db.Timestamptz(3)
+
+  order         Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  partnerPoint  PartnerPoint      @relation(fields: [partnerPointId], references: [id], onDelete: Restrict)
+
+  @@index([partnerPointId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("pickup_requests")
 }
 
 // Pagos a influencers
