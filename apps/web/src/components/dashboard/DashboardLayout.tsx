@@ -106,6 +106,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     Órdenes
                   </Link>
                   <Link
+                    href="/dashboard/partners"
+                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-primary-turquoise hover:bg-gray-50 rounded-lg transition-colors"
+                  >
+                    Partners
+                  </Link>
+                  <Link
                     href="/dashboard/reviews"
                     className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-primary-turquoise hover:bg-gray-50 rounded-lg transition-colors w-30"
                   >
@@ -304,6 +310,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     onClick={() => setShowMobileMenu(false)}
                   >
                     Órdenes
+                  </Link>
+                  <Link
+                    href="/dashboard/partners"
+                    className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-primary-turquoise hover:bg-gray-50 rounded-lg"
+                    onClick={() => setShowMobileMenu(false)}
+                  >
+                    Partners
                   </Link>
                   <Link
                     href="/dashboard/reviews"

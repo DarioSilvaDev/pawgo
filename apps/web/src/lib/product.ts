@@ -82,6 +82,14 @@ export async function getProducts(filters?: {
   const query = params.toString();
   const endpoint = `/products${query ? `?${query}` : ""}`;
   const response = await fetchAPI(endpoint);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: "Error desconocido",
+    }));
+    throw new Error(error.error || `HTTP error! status: ${response.status}`);
+  }
+
   return response.json();
 }
 

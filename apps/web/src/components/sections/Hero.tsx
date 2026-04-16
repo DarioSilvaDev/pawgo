@@ -13,12 +13,31 @@ export function Hero() {
   const router = useRouter();
   const cta = useCTAConfig();
 
+  const withPartnerReferral = (targetUrl: string): string => {
+    if (typeof window === "undefined") return targetUrl;
+    if (!targetUrl.startsWith("/")) return targetUrl;
+
+    const currentParams = new URLSearchParams(window.location.search);
+    const partnerRef = currentParams.get("partner_ref");
+    if (!partnerRef) return targetUrl;
+
+    const [path, rawQuery] = targetUrl.split("?");
+    const nextParams = new URLSearchParams(rawQuery || "");
+
+    if (!nextParams.has("partner_ref")) {
+      nextParams.set("partner_ref", partnerRef);
+    }
+
+    const query = nextParams.toString();
+    return query ? `${path}?${query}` : path;
+  };
+
   const handleCTAClick = () => {
     trackEvent(EventType.BUY_INTENT_CLICKED, { source: "boton_quiero_uno" });
 
     // Fallback if config is not yet loaded or corrupt
     if (!cta) {
-      router.push("/checkout");
+      router.push(withPartnerReferral("/checkout"));
       return;
     }
 
@@ -29,12 +48,12 @@ export function Hero() {
         break;
 
       case "REDIRECT":
-        router.push(cta.url ?? "/checkout");
+        router.push(withPartnerReferral(cta.url ?? "/checkout"));
         break;
 
       default:
         console.warn("Unknown CTA action", cta);
-        router.push("/checkout");
+        router.push(withPartnerReferral("/checkout"));
     }
   };
 

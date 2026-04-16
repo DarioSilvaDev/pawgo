@@ -14,8 +14,10 @@ import { CustomerInfoForm } from "@/components/checkout/CustomerInfoForm";
 import { CustomerInfo } from "@/lib/order";
 import { getEffectivePrice } from "@/lib/pricing";
 import { BuyIntentModal } from "@/components/modals/BuyIntentModal";
+import { getPickupPoints, PickupPoint } from "@/lib/partner";
 
 const STEPS = ["Seleccionar Producto", "Aplicar Descuento", "Datos del Cliente", "Datos de Envío", "Confirmar Compra"];
+const PARTNER_STEPS = ["Seleccionar Producto", "Datos del Cliente", "Entrega o Retiro", "Confirmar Compra"];
 
 // Estructura: Map<productId, Map<variantId, quantity>>
 type SelectedProducts = Map<string, Map<string, number>>;
@@ -36,11 +38,41 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [showStockModal, setShowStockModal] = useState(false);
   const [selectedProductForModal, setSelectedProductForModal] = useState<Product | undefined>();
+  const [partnerReferralSlug, setPartnerReferralSlug] = useState<string | null>(null);
+  const [fulfillmentType, setFulfillmentType] = useState<"home_delivery" | "pickup_point">("home_delivery");
+  const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([]);
+  const [selectedPickupPointId, setSelectedPickupPointId] = useState<string>("");
+
+  const isPartnerFlow = !!partnerReferralSlug;
+  const steps = isPartnerFlow ? PARTNER_STEPS : STEPS;
+  const lastStep = steps.length;
+
+  useEffect(() => {
+    if (currentStep > lastStep) {
+      setCurrentStep(lastStep);
+    }
+  }, [currentStep, lastStep]);
 
   const handleBackInStockRequest = (product: Product) => {
     setSelectedProductForModal(product);
     setShowStockModal(true);
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("partner_ref")?.trim().toLowerCase();
+
+    if (fromUrl) {
+      setPartnerReferralSlug(fromUrl);
+      setAppliedCode(undefined);
+      setDiscountAmount(0);
+    } else {
+      setPartnerReferralSlug(null);
+      setFulfillmentType("home_delivery");
+    }
+  }, []);
 
   // Reset processing state when component mounts (e.g., user navigates back)
   useEffect(() => {
@@ -68,6 +100,51 @@ export default function CheckoutPage() {
 
     fetchProducts();
   }, []);
+
+  useEffect(() => {
+    if (!isPartnerFlow) return;
+
+    const fetchPoints = async () => {
+      try {
+        const points = await getPickupPoints();
+        setPickupPoints(points);
+        if (points.length > 0 && !selectedPickupPointId) {
+          setSelectedPickupPointId(points[0].id);
+        }
+      } catch (err) {
+        console.error("Error fetching pickup points:", err);
+      }
+    };
+
+    fetchPoints();
+  }, [isPartnerFlow, selectedPickupPointId]);
+
+  const selectedPickupPoint = useMemo(
+    () => pickupPoints.find((point) => point.id === selectedPickupPointId),
+    [pickupPoints, selectedPickupPointId]
+  );
+
+  const formatPickupAddress = (point?: PickupPoint) => {
+    if (!point) return "";
+
+    const rawAddress = point.address;
+    const getField = (keys: string[]) => {
+      if (!rawAddress || typeof rawAddress !== "object") return "";
+      for (const key of keys) {
+        const value = rawAddress[key];
+        if (typeof value === "string" && value.trim() !== "") {
+          return value.trim();
+        }
+      }
+      return "";
+    };
+
+    const line1 = getField(["line1", "street", "addressLine", "direccion"]);
+    const line2 = getField(["line2", "reference", "details", "referencia"]);
+    const cityState = `${point.city || ""}${point.state ? `${point.city ? ", " : ""}${point.state}` : ""}`;
+
+    return [line1, line2, cityState].filter(Boolean).join(" - ");
+  };
 
   // Calculate order totals
   const orderData = useMemo(() => {
@@ -154,25 +231,37 @@ export default function CheckoutPage() {
   };
 
   const canProceedToStep2 = orderData.items.length > 0;
-  const canProceedToStep3 = canProceedToStep2;
-  const canProceedToStep4 = customerInfo !== null;
-  const canProceedToStep5 =
-    shippingAddress !== null &&
-    shippingAddress.zipCode &&
-    shippingAddress.street.trim() !== "" &&
-    shippingAddress.city.trim() !== "" &&
-    shippingAddress.state.trim() !== "" &&
-    shippingAddress.country.trim() !== "";
+  const canProceedToStep3 = customerInfo !== null;
+  const canProceedToStep4 =
+    fulfillmentType === "pickup_point"
+      ? selectedPickupPointId.trim() !== ""
+      : shippingAddress !== null &&
+      shippingAddress.zipCode &&
+      shippingAddress.street.trim() !== "" &&
+      shippingAddress.city.trim() !== "" &&
+      shippingAddress.state.trim() !== "" &&
+      shippingAddress.country.trim() !== "";
 
   const handleNext = () => {
+    if (!isPartnerFlow) {
+      if (currentStep === 1 && canProceedToStep2) {
+        setCurrentStep(2);
+      } else if (currentStep === 2 && canProceedToStep2) {
+        setCurrentStep(3);
+      } else if (currentStep === 3 && canProceedToStep3) {
+        setCurrentStep(4);
+      } else if (currentStep === 4 && canProceedToStep4) {
+        setCurrentStep(5);
+      }
+      return;
+    }
+
     if (currentStep === 1 && canProceedToStep2) {
       setCurrentStep(2);
     } else if (currentStep === 2 && canProceedToStep3) {
       setCurrentStep(3);
     } else if (currentStep === 3 && canProceedToStep4) {
       setCurrentStep(4);
-    } else if (currentStep === 4 && canProceedToStep5) {
-      setCurrentStep(5);
     }
   };
 
@@ -208,9 +297,12 @@ export default function CheckoutPage() {
       const orderDataToSend: CreateOrderDto = {
         items: orderItems,
         customerInfo: customerInfo,
-        discountCode: appliedCode,
-        shippingMethod: "standard",
-        shippingAddress: shippingAddress || undefined,
+        discountCode: isPartnerFlow ? undefined : appliedCode,
+        shippingMethod: fulfillmentType === "pickup_point" ? "pickup_point" : "standard",
+        fulfillmentType,
+        pickupPointId: fulfillmentType === "pickup_point" ? selectedPickupPointId : undefined,
+        partnerReferralSlug: partnerReferralSlug || undefined,
+        shippingAddress: fulfillmentType === "home_delivery" ? shippingAddress || undefined : undefined,
       };
 
       // 1. Create order
@@ -267,7 +359,15 @@ export default function CheckoutPage() {
         </div>
 
         {/* Stepper */}
-        <CheckoutStepper currentStep={currentStep} steps={STEPS} />
+        <CheckoutStepper currentStep={currentStep} steps={steps} />
+
+        {isPartnerFlow && (
+          <div className="mb-6 bg-teal-50 border border-teal-200 rounded-lg p-4">
+            <p className="text-sm text-teal-800">
+              Estás comprando desde un <strong>QR de Punto PawGo</strong>.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
           {/* Main Content */}
@@ -298,7 +398,7 @@ export default function CheckoutPage() {
             )}
 
             {/* Step 2: Discount Code */}
-            {currentStep === 2 && (
+            {!isPartnerFlow && currentStep === 2 && (
               <div className="space-y-6">
                 <DiscountCodeInput
                   subtotal={orderData.subtotal}
@@ -311,7 +411,7 @@ export default function CheckoutPage() {
             )}
 
             {/* Step 3: Customer Info */}
-            {currentStep === 3 && (
+            {((!isPartnerFlow && currentStep === 3) || (isPartnerFlow && currentStep === 2)) && (
               <div className="space-y-6">
                 <CustomerInfoForm
                   onInfoChange={setCustomerInfo}
@@ -321,17 +421,78 @@ export default function CheckoutPage() {
             )}
 
             {/* Step 4: Shipping Address */}
-            {currentStep === 4 && (
+            {((!isPartnerFlow && currentStep === 4) || (isPartnerFlow && currentStep === 3)) && (
               <div className="space-y-6">
-                <ShippingAddressForm
-                  onAddressChange={setShippingAddress}
-                  initialAddress={shippingAddress}
-                />
+                {isPartnerFlow ? (
+                  <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+                    <h2 className="text-xl md:text-2xl font-semibold text-text-black mb-4">
+                      Método de entrega
+                    </h2>
+                    <div className="space-y-3">
+                      <label className="flex items-start gap-3 border rounded-lg p-3 cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={fulfillmentType === "home_delivery"}
+                          onChange={() => setFulfillmentType("home_delivery")}
+                          className="mt-1"
+                        />
+                        <div>
+                          <p className="font-semibold text-text-black">Envío a domicilio</p>
+                          <p className="text-sm text-text-dark-gray">Recibís tu pedido en tu dirección.</p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start gap-3 border rounded-lg p-3 cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={fulfillmentType === "pickup_point"}
+                          onChange={() => setFulfillmentType("pickup_point")}
+                          className="mt-1"
+                        />
+                        <div>
+                          <p className="font-semibold text-text-black">Retiro en Punto PawGo</p>
+                          <p className="text-sm text-text-dark-gray">
+                            Te avisamos por email cuando el local tenga stock para retirar.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+
+                    {fulfillmentType === "pickup_point" && (
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Selecciona un Punto PawGo
+                        </label>
+                        <select
+                          value={selectedPickupPointId}
+                          onChange={(e) => setSelectedPickupPointId(e.target.value)}
+                          className="input-field"
+                        >
+                          {pickupPoints.length === 0 && (
+                            <option value="">No hay puntos disponibles</option>
+                          )}
+                          {pickupPoints.map((point) => (
+                            <option key={point.id} value={point.id}>
+                              {point.partner.name} - {formatPickupAddress(point) || point.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {(!isPartnerFlow || fulfillmentType === "home_delivery") && (
+                  <ShippingAddressForm
+                    onAddressChange={setShippingAddress}
+                    initialAddress={shippingAddress}
+                  />
+                )}
               </div>
             )}
 
             {/* Step 5: Order Confirmation */}
-            {currentStep === 5 && (
+            {((!isPartnerFlow && currentStep === 5) || (isPartnerFlow && currentStep === 4)) && (
               <div className="space-y-6">
                 <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
                   <h2 className="text-xl md:text-2xl font-semibold text-text-black mb-4">
@@ -362,7 +523,7 @@ export default function CheckoutPage() {
                     )}
 
                     {/* Shipping Address Summary */}
-                    {shippingAddress && (
+                    {fulfillmentType === "home_delivery" && shippingAddress && (
                       <div>
                         <h3 className="font-semibold text-text-black mb-2">
                           Datos de Envío:
@@ -389,6 +550,24 @@ export default function CheckoutPage() {
                             <p className="text-text-dark-gray pt-1 border-t border-gray-200 mt-1">
                               <span className="font-medium">Observaciones:</span> {shippingAddress.addressNotes}
                             </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {fulfillmentType === "pickup_point" && (
+                      <div>
+                        <h3 className="font-semibold text-text-black mb-2">
+                          Retiro en Punto PawGo:
+                        </h3>
+                        <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
+                          {!selectedPickupPoint ? (
+                            <p className="text-text-dark-gray">Sin punto seleccionado</p>
+                          ) : (
+                            <>
+                              <p className="text-text-dark-gray"><span className="font-medium">Local:</span> {selectedPickupPoint.partner.name}</p>
+                              <p className="text-text-dark-gray"><span className="font-medium">Dirección:</span> {formatPickupAddress(selectedPickupPoint) || selectedPickupPoint.name}</p>
+                            </>
                           )}
                         </div>
                       </div>
@@ -460,14 +639,19 @@ export default function CheckoutPage() {
                   Atrás
                 </button>
               )}
-              {currentStep < STEPS.length ? (
+              {currentStep < lastStep ? (
                 <button
                   onClick={handleNext}
                   disabled={
-                    (currentStep === 1 && !canProceedToStep2) ||
-                    (currentStep === 2 && !canProceedToStep3) ||
-                    (currentStep === 3 && !canProceedToStep4) ||
-                    (currentStep === 4 && !canProceedToStep5)
+                    (!isPartnerFlow &&
+                      ((currentStep === 1 && !canProceedToStep2) ||
+                        (currentStep === 2 && !canProceedToStep2) ||
+                        (currentStep === 3 && !canProceedToStep3) ||
+                        (currentStep === 4 && !canProceedToStep4))) ||
+                    (isPartnerFlow &&
+                      ((currentStep === 1 && !canProceedToStep2) ||
+                        (currentStep === 2 && !canProceedToStep3) ||
+                        (currentStep === 3 && !canProceedToStep4)))
                   }
                   className="btn-primary flex-1 sm:flex-none sm:px-8 disabled:opacity-50 disabled:cursor-not-allowed order-1 sm:order-2"
                 >

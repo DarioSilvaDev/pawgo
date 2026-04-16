@@ -18,6 +18,9 @@ export interface CreateOrderDto {
   leadId?: string;
   customerInfo?: CustomerInfo;
   items: OrderItem[];
+  fulfillmentType?: "home_delivery" | "pickup_point";
+  pickupPointId?: string;
+  partnerReferralSlug?: string;
   shippingAddress?: {
     street: string;
     city: string;
@@ -58,6 +61,8 @@ export interface Order {
   id: string;
   leadId?: string;
   discountCodeId?: string;
+  fulfillmentType?: "home_delivery" | "pickup_point";
+  pickupPointId?: string;
   status: string;
   subtotal: number;
   discount: number;
