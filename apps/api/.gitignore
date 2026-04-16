@@ -6,6 +6,8 @@ node_modules/
 # Testing
 coverage/
 
+/.agents
+
 # Next.js
 .next/
 out/
