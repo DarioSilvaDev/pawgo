@@ -4,6 +4,8 @@ export interface Order {
     id: string;
     leadId?: string;
     discountCodeId?: string;
+    fulfillmentType?: 'home_delivery' | 'pickup_point';
+    pickupPointId?: string;
     status: OrderStatus;
     subtotal: number; // Total antes de descuentos
     discount: number; // Descuento total aplicado
@@ -55,6 +57,9 @@ export interface CreateOrderDto {
     leadId?: string;
     customerInfo?: CustomerInfo; // Datos del cliente para crear/actualizar Lead
     items: CreateOrderItemDto[];
+    fulfillmentType?: 'home_delivery' | 'pickup_point';
+    pickupPointId?: string;
+    partnerReferralSlug?: string;
     shippingAddress?: Address;
     shippingMethod?: string;
     discountCode?: string; // Código de descuento opcional

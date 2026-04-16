@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma, OrderStatus, ShipmentStatus } from "@prisma/client";
+import { PrismaClient, Prisma, OrderStatus, ShipmentStatus, FulfillmentType } from "@prisma/client";
 import { CreateOrderDto, OrderItem } from "../shared/index.js";
 import { DiscountCodeService } from "./discount-code.service.js";
 import { CommissionService } from "./commission.service.js";
@@ -19,6 +19,7 @@ import {
   type OrderCreatedPayload,
   type OrderShippedPayload,
 } from "../shared/events.js";
+import { PartnerService } from "./partner.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // State Machine — Valid Transitions
@@ -45,15 +46,18 @@ export class OrderService {
   private discountCodeService: DiscountCodeService;
   private commissionService: CommissionService;
   private miCorreoService: MiCorreoService;
+  private partnerService: PartnerService;
 
   constructor(
     discountCodeService: DiscountCodeService,
     commissionService: CommissionService,
-    miCorreoService: MiCorreoService
+    miCorreoService: MiCorreoService,
+    partnerService: PartnerService
   ) {
     this.discountCodeService = discountCodeService;
     this.commissionService = commissionService;
     this.miCorreoService = miCorreoService;
+    this.partnerService = partnerService;
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -81,6 +85,36 @@ export class OrderService {
    * Create a new order with status AWAITING_PAYMENT
    */
   async create(data: CreateOrderDto) {
+    if (data.partnerReferralSlug && data.discountCode) {
+      throw new Error("Las compras originadas por QR de partner no admiten códigos de descuento");
+    }
+
+    const fulfillmentType = (data.fulfillmentType ?? "home_delivery") as FulfillmentType;
+    const isPickup = fulfillmentType === FulfillmentType.pickup_point;
+
+    if (isPickup && !data.pickupPointId) {
+      throw new Error("Debes seleccionar un Punto PawGo para retiro");
+    }
+
+    if (isPickup && data.pickupPointId) {
+      await this.partnerService.ensurePickupPointAvailable(data.pickupPointId);
+    }
+
+    if (!isPickup && !data.shippingAddress) {
+      throw new Error("La dirección de envío es requerida para envíos a domicilio");
+    }
+
+    let validatedPartnerReferralSlug: string | null = null;
+    if (data.partnerReferralSlug) {
+      const referralSource = await this.partnerService.resolveReferralBySlug(
+        data.partnerReferralSlug
+      );
+      if (!referralSource) {
+        throw new Error("Referencia de partner inválida o inactiva");
+      }
+      validatedPartnerReferralSlug = referralSource.slug;
+    }
+
     const itemsWithDetails: OrderItem[] = [];
     let subtotal = prismaDecimal(0);
 
@@ -206,12 +240,14 @@ export class OrderService {
     const order = await prisma.order.create({
       data: {
         leadId,
+        fulfillmentType,
+        pickupPointId: isPickup ? data.pickupPointId ?? null : null,
         subtotal: prismaNumber(subtotal),
         discount: 0,
         shippingCost: prismaNumber(shippingCost),
         total: prismaNumber(subtotal.add(shippingCost)),
         currency: "ARS",
-        shippingAddress: data.shippingAddress
+        shippingAddress: !isPickup && data.shippingAddress
           ? (data.shippingAddress as unknown as Prisma.InputJsonValue)
           : Prisma.JsonNull,
         shippingMethod: data.shippingMethod ?? null,
@@ -237,6 +273,14 @@ export class OrderService {
 
     // Apply discount code if provided
     let finalOrder = order;
+    if (validatedPartnerReferralSlug) {
+      await this.partnerService.attachAttributionToOrder(order.id, validatedPartnerReferralSlug);
+    }
+
+    if (isPickup && data.pickupPointId) {
+      await this.partnerService.createPickupRequest(order.id, data.pickupPointId);
+    }
+
     if (data.discountCode) {
       finalOrder = await this.applyDiscountCode(order.id, data.discountCode);
     }
@@ -268,6 +312,11 @@ export class OrderService {
     if (!order) throw new Error("Orden no encontrada");
     if (order.status !== OrderStatus.awaiting_payment) {
       throw new Error("Solo se pueden aplicar descuentos a órdenes en espera de pago");
+    }
+
+    const hasPartnerAttribution = await this.partnerService.hasPartnerAttribution(orderId);
+    if (hasPartnerAttribution) {
+      throw new Error("Esta orden fue iniciada desde un QR de partner y no admite códigos de descuento");
     }
 
     const items = order.items;
@@ -359,6 +408,24 @@ export class OrderService {
         },
         payments: true,
         commission: true,
+        partnerCommission: true,
+        attribution: {
+          include: {
+            partner: {
+              select: { id: true, name: true, slug: true },
+            },
+            partnerPoint: {
+              select: { id: true, name: true, city: true, state: true },
+            },
+            referralSource: {
+              select: { id: true, slug: true, sourceType: true },
+            },
+          },
+        },
+        pickupPoint: {
+          select: { id: true, name: true, city: true, state: true },
+        },
+        pickupRequest: true,
         shipment: true,
         eventLogs: { orderBy: { createdAt: "asc" } },
         items: {
@@ -412,6 +479,16 @@ export class OrderService {
           payments: {
             select: { id: true, status: true, amount: true, currency: true, paymentMethod: true, createdAt: true },
             orderBy: { createdAt: "desc" },
+          },
+          attribution: {
+            include: {
+              partner: {
+                select: { id: true, name: true, slug: true },
+              },
+            },
+          },
+          pickupPoint: {
+            select: { id: true, name: true, city: true, state: true },
           },
           shipment: {
             select: { id: true, status: true, trackingNumber: true, createdAt: true },
@@ -521,6 +598,8 @@ export class OrderService {
         await this.commissionService.createFromOrder(order.id);
       }
 
+      await this.partnerService.createCommissionFromPaidOrder(order.id);
+
       // Dispatch PAYMENT_APPROVED event (email handled by subscriber)
       await eventDispatcher.dispatch(
         createEvent<PaymentApprovedPayload>(
@@ -542,6 +621,8 @@ export class OrderService {
     // ── Side-effects when order is CANCELLED ─────────────────
     // (Stock ya fue restaurado dentro de la $transaction)
     if (status === OrderStatus.cancelled) {
+      await this.partnerService.cancelCommissionByOrder(order.id);
+
       await eventDispatcher.dispatch(
         createEvent<PaymentRejectedPayload>(
           OrderEventType.PAYMENT_REJECTED,
@@ -561,6 +642,8 @@ export class OrderService {
     // ── Side-effects when order is REFUNDED ──────────────────
     // (Stock ya fue restaurado dentro de la $transaction)
     if (status === OrderStatus.refunded) {
+      await this.partnerService.cancelCommissionByOrder(order.id);
+
       await eventDispatcher.dispatch(
         createEvent(OrderEventType.ORDER_REFUNDED, id, {
           orderId: id,

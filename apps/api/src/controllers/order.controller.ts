@@ -56,6 +56,9 @@ const createOrderSchema = z.object({
       country: z.string(),
     })
     .optional(),
+  fulfillmentType: z.enum(["home_delivery", "pickup_point"]).optional(),
+  pickupPointId: z.string().optional(),
+  partnerReferralSlug: z.string().optional(),
   shippingMethod: z.string().optional(),
   discountCode: z.string().optional(),
 });

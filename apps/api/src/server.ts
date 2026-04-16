@@ -26,6 +26,7 @@ import { configRoutes } from "./routes/config.routes.js";
 import { miCorreoRoutes } from "./routes/micorreo/index.js";
 import { leadNotificationRoutes } from "./routes/lead-notification.routes.js";
 import { reviewRoutes } from "./routes/review.routes.js";
+import { partnerRoutes } from "./routes/partner.routes.js";
 import { registerReviewReminderWorker } from "./jobs/review-reminder.job.js";
 import { registerMonthlyWinnerWorker, scheduleMonthlyWinnerJob } from "./jobs/monthly-winner.job.js";
 import { registerStockReplenishmentWorker } from "./jobs/stock-reservation.job.js";
@@ -41,6 +42,7 @@ import { MercadoPagoService } from "./services/mercadopago.service.js";
 import { InfluencerPaymentService } from "./services/influencer-payment.service.js";
 import { StorageService } from "./services/storage.service.js";
 import { AnalyticsService } from "./services/analytics.service.js";
+import { PartnerService } from "./services/partner.service.js";
 import { MiCorreoService } from "./services/micorreo/micorreo.service.js";
 import multipart from "@fastify/multipart";
 import { LeadService } from "./services/lead.service.js";
@@ -62,17 +64,34 @@ await fastify.register(helmet, {
   crossOriginResourcePolicy: { policy: "cross-origin" },
   crossOriginEmbedderPolicy: false,
 });
+
+const corsAllowedOrigins =
+  envs.NODE_ENV === "production"
+    ? [envs.FRONTEND_URL]
+    : [
+      "https://pawgo-ashy.vercel.app",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "http://localhost:3001",
+      "http://127.0.0.1:3001",
+    ];
+
+const normalizeOrigin = (origin: string) => origin.replace(/\/+$/, "");
+
 await fastify.register(cors, {
-  origin:
-    envs.NODE_ENV === "production"
-      ? [envs.FRONTEND_URL]
-      : [
-        "https://pawgo-ashy.vercel.app",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-      ],
+  origin: (origin, callback) => {
+    // Requests sin origin (health checks, curl, apps nativas) no deben bloquearse
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    const isAllowed = corsAllowedOrigins.some(
+      (allowedOrigin) => normalizeOrigin(allowedOrigin) === normalizeOrigin(origin)
+    );
+
+    callback(null, isAllowed);
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "x-submission-source"],
@@ -115,7 +134,8 @@ const leadService = new LeadService();
 const discountCodeService = new DiscountCodeService();
 const commissionService = new CommissionService();
 const miCorreoService = new MiCorreoService();
-const orderService = new OrderService(discountCodeService, commissionService, miCorreoService);
+const partnerService = new PartnerService();
+const orderService = new OrderService(discountCodeService, commissionService, miCorreoService, partnerService);
 const mercadoPagoService = new MercadoPagoService();
 const storageService = new StorageService();
 const stockReservationService = new StockReservationService(boss);
@@ -246,6 +266,11 @@ await fastify.register(reviewRoutes, {
   prefix: "/api",
   tokenService,
   storageService,
+});
+await fastify.register(partnerRoutes, {
+  prefix: "/api",
+  tokenService,
+  partnerService,
 });
 
 // Note: Files are now served from Backblaze B2, not from local filesystem
