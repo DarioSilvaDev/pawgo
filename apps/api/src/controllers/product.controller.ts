@@ -11,6 +11,7 @@ const createProductSchema = z.object({
     .positive("El precio de lanzamiento debe ser positivo")
     .optional()
     .nullable(),
+  cashPrice: z.number().positive("El precio contado debe ser positivo"),
   currency: z.string().optional().default("ARS"),
   // Images are stored as storage keys. The API may also receive URLs (signed/public) and will normalize.
   images: z.array(z.string().min(1)).optional(),
@@ -21,6 +22,7 @@ const createProductSchema = z.object({
         name: z.string().min(1),
         size: z.string().optional(),
         price: z.number().positive(),
+        cashPrice: z.number().positive().optional(),
         stock: z.number().int().nonnegative().optional(),
         sku: z.string().optional(),
         isActive: z.boolean().optional().default(true),
@@ -38,6 +40,7 @@ const updateProductSchema = z.object({
     .positive("El precio de lanzamiento debe ser positivo")
     .optional()
     .nullable(),
+  cashPrice: z.number().positive("El precio contado debe ser positivo").optional(),
   currency: z.string().optional(),
   // Images are stored as storage keys. The API may also receive URLs (signed/public) and will normalize.
   images: z.array(z.string().min(1)).optional(),
@@ -48,6 +51,7 @@ const createVariantSchema = z.object({
   name: z.string().min(1, "El nombre es requerido"),
   size: z.string().optional(),
   price: z.number().positive("El precio debe ser positivo").optional(),
+  cashPrice: z.number().positive("El precio contado debe ser positivo").optional(),
   stock: z.number().int().nonnegative().optional(),
   sku: z.string().optional(),
   isActive: z.boolean().optional().default(true),
@@ -57,6 +61,7 @@ const updateVariantSchema = z.object({
   name: z.string().min(1).optional(),
   size: z.string().optional(),
   price: z.number().positive().optional(),
+  cashPrice: z.number().positive().optional(),
   stock: z.number().int().nonnegative().optional(),
   sku: z.string().optional(),
   isActive: z.boolean().optional(),

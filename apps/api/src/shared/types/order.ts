@@ -5,6 +5,7 @@ export interface Order {
     leadId?: string;
     discountCodeId?: string;
     fulfillmentType?: 'home_delivery' | 'pickup_point';
+    paymentType?: PaymentType;
     pickupPointId?: string;
     status: OrderStatus;
     subtotal: number; // Total antes de descuentos
@@ -58,12 +59,15 @@ export interface CreateOrderDto {
     customerInfo?: CustomerInfo; // Datos del cliente para crear/actualizar Lead
     items: CreateOrderItemDto[];
     fulfillmentType?: 'home_delivery' | 'pickup_point';
+    paymentType?: PaymentType;
     pickupPointId?: string;
     partnerReferralSlug?: string;
     shippingAddress?: Address;
     shippingMethod?: string;
     discountCode?: string; // Código de descuento opcional
 }
+
+export type PaymentType = 'card' | 'cash';
 
 export interface CreateOrderItemDto {
     productId: string;

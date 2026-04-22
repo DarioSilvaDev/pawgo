@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { MercadoPagoService } from "../services/mercadopago.service.js";
 import { verifyMercadoPagoSignature } from "../services/mercadopago-signature.js";
 import { OrderService } from "../services/order.service.js";
-import { OrderStatus, PaymentStatus, PrismaClient } from "@prisma/client";
+import { OrderStatus, PaymentStatus, PrismaClient, PaymentType } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -154,6 +154,27 @@ export function createWebhookController(
           targetPaymentStatus = PaymentStatus.pending;
         }
 
+        const expectedPaymentType = payment.order.paymentType as PaymentType;
+        const isPaymentTypeCompatible = mercadoPagoService.isPaymentTypeCompatible(
+          expectedPaymentType,
+          result.paymentTypeId
+        );
+
+        if (!isPaymentTypeCompatible && result.status === "approved") {
+          request.log.warn(
+            {
+              orderId: payment.orderId,
+              paymentId: payment.id,
+              expectedPaymentType,
+              mercadoPagoPaymentType: result.paymentTypeId,
+            },
+            "[Webhook] Payment type mismatch detected. Blocking approval to avoid price arbitrage"
+          );
+
+          targetPaymentStatus = PaymentStatus.rejected;
+          targetOrderStatus = OrderStatus.cancelled;
+        }
+
         const currentPaymentStatus = payment.status as PaymentStatus;
         const currentOrderStatus = payment.order.status as OrderStatus;
 
@@ -220,7 +241,14 @@ export function createWebhookController(
             { orderId: payment.orderId, from: currentOrderStatus, to: targetOrderStatus },
             "[Webhook] Updating order status"
           );
-          await orderService.updateStatus(payment.orderId, targetOrderStatus);
+          await orderService.updateStatus(payment.orderId, targetOrderStatus, {
+            paymentId: payment.id,
+            mercadoPagoPaymentId: result.paymentId,
+            reason:
+              !isPaymentTypeCompatible && result.status === "approved"
+                ? `payment_type_mismatch:${expectedPaymentType}:${result.paymentTypeId}`
+                : undefined,
+          });
         }
 
         request.log.info(

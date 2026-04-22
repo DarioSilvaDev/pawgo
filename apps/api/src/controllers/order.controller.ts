@@ -57,6 +57,7 @@ const createOrderSchema = z.object({
     })
     .optional(),
   fulfillmentType: z.enum(["home_delivery", "pickup_point"]).optional(),
+  paymentType: z.enum(["card", "cash"]).optional().default("card"),
   pickupPointId: z.string().optional(),
   partnerReferralSlug: z.string().optional(),
   shippingMethod: z.string().optional(),
@@ -198,6 +199,7 @@ export function createOrderController(
           id: order.id,
           leadId: order.leadId || undefined,
           discountCodeId: order.discountCodeId || undefined,
+          paymentType: order.paymentType,
           status: order.status,
           subtotal: prismaNumber(prismaDecimal(order.subtotal)),
           discount: prismaNumber(prismaDecimal(order.discount)),
@@ -253,9 +255,10 @@ export function createOrderController(
         // (optimizaci\u00f3n: evitar crear preferencia en MP si ya hay una)
         const existingPayment = await prisma.payment.findUnique({
           where: {
-            orderId_paymentMethod: {
+            orderId_paymentMethod_paymentType: {
               orderId: order.id,
               paymentMethod: "mercadopago",
+              paymentType: order.paymentType,
             },
           },
         });
@@ -282,9 +285,10 @@ export function createOrderController(
         // (no-op en campos que importan) y devuelve el registro existente
         const payment = await prisma.payment.upsert({
           where: {
-            orderId_paymentMethod: {
+            orderId_paymentMethod_paymentType: {
               orderId: order.id,
               paymentMethod: "mercadopago",
+              paymentType: order.paymentType,
             },
           },
           create: {
@@ -293,14 +297,21 @@ export function createOrderController(
             amount: prismaNumber(prismaDecimal(order.total)),
             currency: "ARS",
             paymentMethod: "mercadopago",
+            paymentType: order.paymentType,
             mercadoPagoPreferenceId: preference.id,
             paymentLink: preference.initPoint,
+            metadata: {
+              paymentType: order.paymentType,
+            } as unknown as Prisma.InputJsonValue,
           },
           update: {
             // Si ya exist\u00eda un payment sin link (edge case), actualizamos con los datos nuevos
             // Si ya ten\u00eda link, Prisma igual ejecuta el UPDATE pero no cambia nada relevante
             mercadoPagoPreferenceId: preference.id,
             paymentLink: preference.initPoint,
+            metadata: {
+              paymentType: order.paymentType,
+            } as unknown as Prisma.InputJsonValue,
           },
         });
 
@@ -456,6 +467,7 @@ export function createOrderController(
             amount: order.total,
             currency: order.currency,
             paymentMethod: "mercadopago",
+            paymentType: order.paymentType,
             mercadoPagoPreferenceId: `TEST_${order.id}`,
             mercadoPagoPaymentId: `TEST_PAYMENT_${order.id}`,
             paymentLink: `#`,

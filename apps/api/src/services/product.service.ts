@@ -9,6 +9,7 @@ export interface CreateProductDto {
   description: string;
   basePrice: number;
   launchPrice?: number | null; // Precio de lanzamiento (opcional, null para no establecer)
+  cashPrice: number;
   currency?: string;
   images?: string[];
   isActive?: boolean;
@@ -19,6 +20,7 @@ export interface CreateProductVariantDto {
   name: string;
   size?: string;
   price?: number; // Opcional: si no se especifica, usará basePrice del producto
+  cashPrice?: number;
   stock?: number;
   sku?: string;
   isActive?: boolean;
@@ -29,6 +31,7 @@ export interface UpdateProductDto {
   description?: string;
   basePrice?: number;
   launchPrice?: number | null; // null para remover el precio de lanzamiento
+  cashPrice?: number;
   currency?: string;
   images?: string[];
   isActive?: boolean;
@@ -38,6 +41,7 @@ export interface UpdateProductVariantDto {
   name?: string;
   size?: string;
   price?: number;
+  cashPrice?: number;
   stock?: number;
   sku?: string;
   isActive?: boolean;
@@ -167,6 +171,16 @@ export class ProductService {
         );
       }
     }
+
+    if (data.cashPrice <= 0) {
+      throw new Error("El precio contado debe ser mayor a 0");
+    }
+
+    const cardReferencePrice = data.launchPrice != null ? data.launchPrice : data.basePrice;
+    if (data.cashPrice > cardReferencePrice) {
+      throw new Error("El precio contado debe ser menor o igual al precio de tarjeta");
+    }
+
     // Validar precios de variantes
     if (data.variants) {
       for (const variant of data.variants) {
@@ -179,6 +193,31 @@ export class ProductService {
             `El precio de la variante "${variant.name}" debe ser mayor a 0`
           );
         }
+
+        if (
+          variant.cashPrice !== undefined &&
+          variant.cashPrice !== null &&
+          variant.cashPrice <= 0
+        ) {
+          throw new Error(
+            `El precio contado de la variante "${variant.name}" debe ser mayor a 0`
+          );
+        }
+
+        const variantCardPrice =
+          variant.price !== undefined && variant.price !== null
+            ? variant.price
+            : cardReferencePrice;
+
+        if (
+          variant.cashPrice !== undefined &&
+          variant.cashPrice !== null &&
+          variant.cashPrice > variantCardPrice
+        ) {
+          throw new Error(
+            `El precio contado de la variante "${variant.name}" debe ser menor o igual al precio de tarjeta`
+          );
+        }
       }
     }
 
@@ -188,6 +227,7 @@ export class ProductService {
         description: data.description,
         basePrice: data.basePrice,
         launchPrice: data.launchPrice,
+        cashPrice: data.cashPrice,
         currency: data.currency || "ARS",
         images: (data.images || []).map((value) => this.extractStorageKey(value) ?? value),
         isActive: data.isActive !== undefined ? data.isActive : true,
@@ -197,6 +237,7 @@ export class ProductService {
               name: variant.name,
               size: variant.size,
               price: variant.price,
+              cashPrice: variant.cashPrice,
               stock: variant.stock,
               sku: variant.sku,
               isActive:
@@ -215,6 +256,34 @@ export class ProductService {
    * Update product
    */
   async update(id: string, data: UpdateProductDto) {
+    const product = await prisma.product.findUnique({ where: { id } });
+    if (!product) {
+      throw new Error("Producto no encontrado");
+    }
+
+    const effectiveBasePrice = data.basePrice ?? Number(product.basePrice);
+    const effectiveLaunchPrice =
+      data.launchPrice !== undefined
+        ? data.launchPrice
+        : product.launchPrice != null
+          ? Number(product.launchPrice)
+          : null;
+
+    if (effectiveLaunchPrice != null && effectiveLaunchPrice > effectiveBasePrice) {
+      throw new Error("El precio de lanzamiento debe ser menor o igual al precio base");
+    }
+
+    const effectiveCardPrice = effectiveLaunchPrice ?? effectiveBasePrice;
+    const effectiveCashPrice = data.cashPrice ?? Number(product.cashPrice);
+
+    if (effectiveCashPrice <= 0) {
+      throw new Error("El precio contado debe ser mayor a 0");
+    }
+
+    if (effectiveCashPrice > effectiveCardPrice) {
+      throw new Error("El precio contado debe ser menor o igual al precio de tarjeta");
+    }
+
     // Validaciones de precio
     if (data.basePrice !== undefined && data.basePrice <= 0) {
       throw new Error("El precio base debe ser mayor a 0");
@@ -225,15 +294,16 @@ export class ProductService {
         if (data.launchPrice <= 0) {
           throw new Error("El precio de lanzamiento debe ser mayor a 0");
         }
-        const product = await prisma.product.findUnique({ where: { id } });
-        const effectiveBasePrice =
-          data.basePrice ?? Number(product?.basePrice ?? 0);
         if (data.launchPrice > effectiveBasePrice) {
           throw new Error(
             "El precio de lanzamiento debe ser menor o igual al precio base"
           );
         }
       }
+    }
+
+    if (data.cashPrice !== undefined && data.cashPrice <= 0) {
+      throw new Error("El precio contado debe ser mayor a 0");
     }
 
     // Construir objeto de datos solo con campos definidos
@@ -244,6 +314,7 @@ export class ProductService {
     if (data.basePrice !== undefined) updateData.basePrice = data.basePrice;
     if (data.launchPrice !== undefined)
       updateData.launchPrice = data.launchPrice;
+    if (data.cashPrice !== undefined) updateData.cashPrice = data.cashPrice;
     if (data.currency !== undefined) updateData.currency = data.currency;
     if (data.images !== undefined) {
       updateData.images = data.images.map((value) => this.extractStorageKey(value) ?? value);
@@ -291,6 +362,10 @@ export class ProductService {
       throw new Error("El precio de la variante debe ser mayor a 0");
     }
 
+    if (data.cashPrice !== undefined && data.cashPrice !== null && data.cashPrice <= 0) {
+      throw new Error("El precio contado de la variante debe ser mayor a 0");
+    }
+
     // Verify product exists
     const product = await prisma.product.findUnique({
       where: { id: productId },
@@ -300,12 +375,26 @@ export class ProductService {
       throw new Error("Producto no encontrado");
     }
 
+    const productCardPrice =
+      product.launchPrice != null ? Number(product.launchPrice) : Number(product.basePrice);
+    const variantCardPrice =
+      data.price !== undefined && data.price !== null ? data.price : productCardPrice;
+
+    if (
+      data.cashPrice !== undefined &&
+      data.cashPrice !== null &&
+      data.cashPrice > variantCardPrice
+    ) {
+      throw new Error("El precio contado de la variante debe ser menor o igual al precio de tarjeta");
+    }
+
     const variant = await prisma.productVariant.create({
       data: {
         productId,
         name: data.name,
         size: data.size,
         price: data.price,
+        cashPrice: data.cashPrice,
         stock: data.stock,
         sku: data.sku,
         isActive: data.isActive !== undefined ? data.isActive : true,
@@ -331,12 +420,51 @@ export class ProductService {
       throw new Error("El precio de la variante debe ser mayor a 0");
     }
 
+    if (data.cashPrice !== undefined && data.cashPrice !== null && data.cashPrice <= 0) {
+      throw new Error("El precio contado de la variante debe ser mayor a 0");
+    }
+
     // Get current stock to check if it's a replenishment (from 0 to > 0)
     const currentVariant = await prisma.productVariant.findUnique({
       where: { id: variantId },
-      select: { stock: true }
+      select: {
+        stock: true,
+        price: true,
+        cashPrice: true,
+        product: {
+          select: {
+            basePrice: true,
+            launchPrice: true,
+          },
+        },
+      },
     });
     console.log("🚀 ~ ProductService ~ updateVariant ~ currentVariant:", currentVariant)
+
+    if (!currentVariant) {
+      throw new Error("Variante no encontrada");
+    }
+
+    const productCardPrice =
+      currentVariant.product.launchPrice != null
+        ? Number(currentVariant.product.launchPrice)
+        : Number(currentVariant.product.basePrice);
+    const nextCardPrice =
+      data.price !== undefined
+        ? data.price ?? productCardPrice
+        : currentVariant.price != null
+          ? Number(currentVariant.price)
+          : productCardPrice;
+    const nextCashPrice =
+      data.cashPrice !== undefined
+        ? data.cashPrice
+        : currentVariant.cashPrice != null
+          ? Number(currentVariant.cashPrice)
+          : null;
+
+    if (nextCashPrice != null && nextCashPrice > nextCardPrice) {
+      throw new Error("El precio contado de la variante debe ser menor o igual al precio de tarjeta");
+    }
 
     const updatedVariant = await prisma.productVariant.update({
       where: { id: variantId },
@@ -344,6 +472,7 @@ export class ProductService {
         name: data.name,
         size: data.size,
         price: data.price,
+        cashPrice: data.cashPrice,
         stock: data.stock,
         sku: data.sku,
         isActive: data.isActive,

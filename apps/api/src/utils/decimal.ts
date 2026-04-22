@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 export type Decimal = Prisma.Decimal;
+export type PaymentType = "card" | "cash";
 
 export function prismaDecimal(
   value: Prisma.Decimal.Value | null | undefined,
@@ -47,15 +48,37 @@ export const d = prismaDecimal;
 export const n = prismaNumber;
 
 /**
- * Calcula el precio efectivo según las reglas de negocio:
- * 1. Si el producto tiene launchPrice → precio efectivo es launchPrice
- * 2. Si no hay launchPrice pero la variante tiene price → precio efectivo es variant.price
- * 3. Si ninguno → precio efectivo es basePrice
+ * Calcula el precio efectivo según método de pago.
+ * card: launchPrice > variant.price > basePrice
+ * cash: variant.cashPrice > product.cashPrice
  */
 export function getEffectivePrice(
-  product: { basePrice: Decimal | number; launchPrice?: Decimal | number | null },
-  variant?: { price?: Decimal | number | null } | null
+  product: {
+    basePrice: Decimal | number;
+    launchPrice?: Decimal | number | null;
+    cashPrice?: Decimal | number | null;
+  },
+  variant: { price?: Decimal | number | null; cashPrice?: Decimal | number | null } | null = null,
+  paymentType: PaymentType = "card"
 ): Prisma.Decimal {
+  if (paymentType === "cash") {
+    if (variant?.cashPrice != null) {
+      const variantCashPrice = prismaDecimal(variant.cashPrice);
+      if (variantCashPrice.greaterThan(0)) {
+        return variantCashPrice;
+      }
+    }
+
+    if (product.cashPrice != null) {
+      const productCashPrice = prismaDecimal(product.cashPrice);
+      if (productCashPrice.greaterThan(0)) {
+        return productCashPrice;
+      }
+    }
+
+    throw new Error("No hay precio contado configurado para este producto");
+  }
+
   // Regla 1: Si hay launchPrice, usar launchPrice
   if (product.launchPrice != null) {
     const launchPrice = prismaDecimal(product.launchPrice);

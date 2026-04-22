@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma, OrderStatus, ShipmentStatus, FulfillmentType } from "@prisma/client";
+import { PrismaClient, Prisma, OrderStatus, ShipmentStatus, FulfillmentType, PaymentType } from "@prisma/client";
 import { CreateOrderDto, OrderItem } from "../shared/index.js";
 import { DiscountCodeService } from "./discount-code.service.js";
 import { CommissionService } from "./commission.service.js";
@@ -90,6 +90,7 @@ export class OrderService {
     }
 
     const fulfillmentType = (data.fulfillmentType ?? "home_delivery") as FulfillmentType;
+    const paymentType = (data.paymentType ?? "card") as PaymentType;
     const isPickup = fulfillmentType === FulfillmentType.pickup_point;
 
     if (isPickup && !data.pickupPointId) {
@@ -165,7 +166,7 @@ export class OrderService {
           }
         }
 
-        const unitPrice = getEffectivePrice(product, variant);
+        const unitPrice = getEffectivePrice(product, variant, paymentType);
         const itemSubtotal = unitPrice.mul(item.quantity);
         subtotal = subtotal.add(itemSubtotal);
 
@@ -241,6 +242,7 @@ export class OrderService {
       data: {
         leadId,
         fulfillmentType,
+        paymentType,
         pickupPointId: isPickup ? data.pickupPointId ?? null : null,
         subtotal: prismaNumber(subtotal),
         discount: 0,
@@ -251,6 +253,15 @@ export class OrderService {
           ? (data.shippingAddress as unknown as Prisma.InputJsonValue)
           : Prisma.JsonNull,
         shippingMethod: data.shippingMethod ?? null,
+        pricingBreakdown: {
+          paymentType,
+          version: "v1",
+          computedAt: new Date().toISOString(),
+          subtotal: prismaNumber(subtotal),
+          discount: 0,
+          shippingCost: prismaNumber(shippingCost),
+          total: prismaNumber(subtotal.add(shippingCost)),
+        } as unknown as Prisma.InputJsonValue,
         itemsSnapshot: itemsWithDetails as unknown as Prisma.InputJsonValue,
         items: {
           create: itemsWithDetails.map((i) => ({
@@ -265,6 +276,7 @@ export class OrderService {
               productName: i.productName,
               variantName: i.variantName ?? null,
               size: i.size ?? null,
+              paymentType,
             } as unknown as Prisma.InputJsonValue,
           })),
         },
@@ -477,7 +489,15 @@ export class OrderService {
             select: { id: true, code: true, discountType: true, discountValue: true },
           },
           payments: {
-            select: { id: true, status: true, amount: true, currency: true, paymentMethod: true, createdAt: true },
+            select: {
+              id: true,
+              status: true,
+              amount: true,
+              currency: true,
+              paymentMethod: true,
+              paymentType: true,
+              createdAt: true,
+            },
             orderBy: { createdAt: "desc" },
           },
           attribution: {

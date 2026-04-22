@@ -81,6 +81,11 @@ enum FulfillmentType {
   pickup_point  @map("pickup_point")
 }
 
+enum PaymentType {
+  card @map("card")
+  cash @map("cash")
+}
+
 enum PartnerReferralSourceType {
   local_qr   @map("local_qr")
   local_code @map("local_code")
@@ -299,6 +304,7 @@ model Product {
   description String
   basePrice   Decimal  @db.Decimal(10, 2) // Precio base del producto
   launchPrice Decimal? @db.Decimal(10, 2) // Precio de lanzamiento (opcional, debe ser <= basePrice)
+  cashPrice   Decimal  @db.Decimal(10, 2) // Precio contado/transferencia (debe ser <= precio de tarjeta)
   currency    String   @default("ARS")
   images      String[]
   isActive    Boolean  @default(true)
@@ -319,6 +325,7 @@ model ProductVariant {
   name      String // Ej: "Pequeño", "Mediano", "Grande"
   size      String? // Tamaño específico (opcional, para compatibilidad con dogSize)
   price     Decimal? @db.Decimal(10, 2) // Precio especial (ej: lanzamiento). Si es null, usa basePrice del producto
+  cashPrice Decimal? @db.Decimal(10, 2) // Precio contado para esta variante. Si es null, usa cashPrice del producto
   stock     Int? // Stock específico de esta variante
   sku       String? // SKU único
   isActive  Boolean  @default(true)
@@ -499,6 +506,7 @@ model Order {
   leadId          String?
   discountCodeId  String? // Código de descuento usado
   fulfillmentType FulfillmentType @default(home_delivery)
+  paymentType     PaymentType @default(card)
   pickupPointId   String?
   status          OrderStatus @default(awaiting_payment)
   subtotal        Decimal     @db.Decimal(10, 2) // Antes de descuento
@@ -509,6 +517,7 @@ model Order {
   shippingAddress Json? // Dirección de envío
   shippingMethod  String? // Método de envío
   itemsSnapshot   Json        @map("items") // Snapshot histórico (fuente de verdad histórica)
+  pricingBreakdown Json? // Snapshot de pricing aplicado al momento de crear la orden
   
   // MiCorreo - Tracking de costos reales de envío
   miCorreoShippingCost    Decimal? @db.Decimal(10, 2) // Costo real del envío en MiCorreo
@@ -539,6 +548,7 @@ model Order {
   @@index([leadId])
   @@index([pickupPointId])
   @@index([fulfillmentType])
+  @@index([paymentType])
   @@index([status])
   @@index([createdAt])
   @@map("orders")
@@ -655,6 +665,7 @@ model Payment {
   amount                  Decimal       @db.Decimal(10, 2)
   currency                String        @default("ARS")
   paymentMethod           String        @default("mercadopago") // "mercadopago", "transfer", "cash"
+  paymentType             PaymentType   @default(card)
   mercadoPagoPreferenceId String? // ID de preferencia en MercadoPago
   mercadoPagoPaymentId    String? // ID de pago en MercadoPago
   paymentLink             String? // Link de pago de MercadoPago
@@ -665,8 +676,9 @@ model Payment {
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   // Un solo intento de pago por m\u00e9todo por orden (previene race condition en createPayment)
-  @@unique([orderId, paymentMethod])
+  @@unique([orderId, paymentMethod, paymentType])
   @@index([orderId])
+  @@index([paymentType])
   @@index([mercadoPagoPaymentId])
   @@index([status])
   @@index([createdAt])
