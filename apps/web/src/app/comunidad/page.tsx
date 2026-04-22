@@ -191,6 +191,25 @@ function ComunidadPageContent() {
             .finally(() => setLoadingRanking(false));
     }, []);
 
+    useEffect(() => {
+        if (!selectedReview) return;
+
+        const originalOverflow = document.body.style.overflow;
+        const handleEsc = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setSelectedReview(null);
+            }
+        };
+
+        document.body.style.overflow = "hidden";
+        window.addEventListener("keydown", handleEsc);
+
+        return () => {
+            document.body.style.overflow = originalOverflow;
+            window.removeEventListener("keydown", handleEsc);
+        };
+    }, [selectedReview]);
+
     const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
     const MAX_IMAGE_SIZE_MB = 15;
     const COMPRESS_TARGET_MB = 1.5; // compress client-side if above this threshold
@@ -800,16 +819,17 @@ function ComunidadPageContent() {
                 {/* ── REVIEW DETAIL MODAL ─────────────────────────────────────── */}
                 {selectedReview && (
                     <div
-                        className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[150] flex items-center justify-center md:p-6 transition-all duration-500 overflow-hidden"
+                        className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[150] flex items-start md:items-center justify-center p-0 md:p-6 transition-all duration-500 overflow-y-auto overscroll-contain"
                         onClick={(e) => {
                             if (e.target === e.currentTarget) setSelectedReview(null);
                         }}
                     >
-                        <div className="bg-white md:rounded-[2.5rem] shadow-2xl overflow-hidden w-full h-full md:max-w-7xl md:h-[85vh] flex flex-col md:flex-row items-stretch relative animate-in fade-in zoom-in duration-500 slide-in-from-bottom-10">
+                        <div className="bg-white w-full min-h-screen md:min-h-0 md:rounded-[2.5rem] shadow-2xl overflow-hidden md:max-w-7xl md:h-[85vh] flex flex-col md:flex-row items-stretch relative animate-in fade-in zoom-in duration-500 slide-in-from-bottom-10">
                             {/* Close button */}
                             <button
                                 onClick={() => setSelectedReview(null)}
-                                className="absolute top-6 right-6 z-[160] bg-white/20 hover:bg-white/40 text-white p-2.5 rounded-full transition-all backdrop-blur-md border border-white/30 active:scale-95"
+                                className="absolute top-4 right-4 md:top-6 md:right-6 z-[160] bg-black/30 md:bg-white/20 hover:bg-black/50 md:hover:bg-white/40 text-white p-2.5 rounded-full transition-all backdrop-blur-md border border-white/40 active:scale-95"
+                                aria-label="Cerrar reseña"
                             >
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
@@ -817,7 +837,7 @@ function ComunidadPageContent() {
                             </button>
 
                             {/* Left: Image (Large - 70% Desktop) */}
-                            <div className="relative w-full h-[60vh] md:h-auto md:w-[70%] bg-zinc-950 flex-shrink-0 group">
+                            <div className="relative w-full h-[48vh] min-h-[300px] sm:h-[55vh] md:h-auto md:w-[68%] bg-zinc-950 flex-shrink-0 group">
                                 {selectedReview.imageUrl ? (
                                     <Image
                                         src={selectedReview.imageUrl}
@@ -837,14 +857,14 @@ function ComunidadPageContent() {
                             </div>
 
                             {/* Right: Content (30% Desktop) */}
-                            <div className="w-full md:w-[30%] bg-white p-6 sm:p-10 flex flex-col md:overflow-y-auto border-l border-gray-100">
-                                <div className="flex items-center gap-5 mb-8">
+                            <div className="w-full md:w-[32%] bg-white px-5 py-6 sm:px-8 sm:py-8 flex flex-col flex-1 min-h-0 overflow-y-auto border-l border-gray-100">
+                                <div className="flex items-start gap-4 sm:gap-5 mb-6 sm:mb-8">
                                     <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center text-white font-black text-3xl shadow-lg ring-4 ring-cyan-50">
                                         {selectedReview.petName.charAt(0).toUpperCase()}
                                     </div>
                                     <div className="flex-1">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <h3 className="text-3xl font-black text-gray-900 leading-tight">{selectedReview.petName}</h3>
+                                        <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                                            <h3 className="text-3xl sm:text-4xl md:text-3xl font-black text-gray-900 leading-tight">{selectedReview.petName}</h3>
                                             <MimoLevelBadge
                                                 level={selectedReview.mimoLevel}
                                                 icon={selectedReview.mimoIcon}
@@ -862,8 +882,8 @@ function ComunidadPageContent() {
                                 </div>
 
                                 <div className="flex-1">
-                                    <div className="relative pt-6 min-h-[100px]">
-                                        <p className="text-gray-700 text-lg leading-relaxed font-medium">
+                                    <div className="relative pt-2 sm:pt-4 min-h-[100px]">
+                                        <p className="text-gray-700 text-base sm:text-lg leading-relaxed font-medium">
                                             {selectedReview.comment}
                                         </p>
                                     </div>
