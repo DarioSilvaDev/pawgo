@@ -12,12 +12,14 @@ import { InstallmentsMessage } from "@/components/checkout/InstallmentsMessage";
 import { ShippingAddressForm, ShippingAddress } from "@/components/checkout/ShippingAddressForm";
 import { CustomerInfoForm } from "@/components/checkout/CustomerInfoForm";
 import { CustomerInfo } from "@/lib/order";
-import { getEffectivePrice } from "@/lib/pricing";
+import { getEffectivePrice, PaymentType } from "@/lib/pricing";
 import { BuyIntentModal } from "@/components/modals/BuyIntentModal";
 import { getPickupPoints, PickupPoint } from "@/lib/partner";
+import { MercadoPagoTrustBadge } from "@/components/checkout/MercadoPagoTrustBadge";
 
 const STEPS = ["Seleccionar Producto", "Aplicar Descuento", "Datos del Cliente", "Datos de Envío", "Confirmar Compra"];
 const PARTNER_STEPS = ["Seleccionar Producto", "Datos del Cliente", "Entrega o Retiro", "Confirmar Compra"];
+const PAYMENT_TYPE_STORAGE_KEY = "checkout_payment_type";
 
 // Estructura: Map<productId, Map<variantId, quantity>>
 type SelectedProducts = Map<string, Map<string, number>>;
@@ -39,6 +41,7 @@ export default function CheckoutPage() {
   const [showStockModal, setShowStockModal] = useState(false);
   const [selectedProductForModal, setSelectedProductForModal] = useState<Product | undefined>();
   const [partnerReferralSlug, setPartnerReferralSlug] = useState<string | null>(null);
+  const [paymentType, setPaymentType] = useState<PaymentType>("card");
   const [fulfillmentType, setFulfillmentType] = useState<"home_delivery" | "pickup_point">("home_delivery");
   const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([]);
   const [selectedPickupPointId, setSelectedPickupPointId] = useState<string>("");
@@ -73,6 +76,20 @@ export default function CheckoutPage() {
       setFulfillmentType("home_delivery");
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const stored = window.localStorage.getItem(PAYMENT_TYPE_STORAGE_KEY);
+    if (stored === "card" || stored === "cash") {
+      setPaymentType(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(PAYMENT_TYPE_STORAGE_KEY, paymentType);
+  }, [paymentType]);
 
   // Reset processing state when component mounts (e.g., user navigates back)
   useEffect(() => {
@@ -171,7 +188,7 @@ export default function CheckoutPage() {
                 quantity,
               });
               // Calcular precio efectivo según reglas de negocio
-              const effectivePrice = getEffectivePrice(product, variant);
+              const effectivePrice = getEffectivePrice(product, variant, paymentType);
               subtotal += effectivePrice * quantity;
             }
           }
@@ -190,7 +207,7 @@ export default function CheckoutPage() {
       shippingCost,
       total,
     };
-  }, [selectedProducts, products, discountAmount]);
+  }, [selectedProducts, products, discountAmount, paymentType]);
 
   const handleSelectProduct = (
     productId: string,
@@ -298,6 +315,7 @@ export default function CheckoutPage() {
         items: orderItems,
         customerInfo: customerInfo,
         discountCode: isPartnerFlow ? undefined : appliedCode,
+        paymentType,
         shippingMethod: fulfillmentType === "pickup_point" ? "pickup_point" : "standard",
         fulfillmentType,
         pickupPointId: fulfillmentType === "pickup_point" ? selectedPickupPointId : undefined,
@@ -381,6 +399,8 @@ export default function CheckoutPage() {
                   </h2>
                   <ProductSelection
                     products={products}
+                    paymentType={paymentType}
+                    onPaymentTypeChange={setPaymentType}
                     selectedProducts={selectedProducts}
                     onSelectProduct={handleSelectProduct}
                     onBackInStockRequest={handleBackInStockRequest}
@@ -590,12 +610,19 @@ export default function CheckoutPage() {
                             <span className="font-medium">
                               $
                               {(
-                                Number(orderData.subtotal).toLocaleString("es-AR")
-                              )}
+                                getEffectivePrice(item.product, item.variant, paymentType) * item.quantity
+                              ).toLocaleString("es-AR")}
                             </span>
                           </div>
                         ))}
                       </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-sm text-text-dark-gray">
+                        <span className="font-medium text-text-black">Método de pago seleccionado:</span>{" "}
+                        {paymentType === "card" ? "Tarjeta (3 cuotas)" : "Contado / transferencia"}
+                      </p>
                     </div>
 
                     {appliedCode && (
@@ -612,17 +639,20 @@ export default function CheckoutPage() {
                       </div>
                     )}
 
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <p className="text-sm text-blue-800 mb-2">
-                        <strong>Próximo paso:</strong> Al completar el pedido, serás redirigido a MercadoPago
-                        para realizar el pago de forma segura.
-                      </p>
-                      <p className="text-xs text-blue-700">
-                        Una vez completado el pago, serás redirigido de vuelta a nuestro sitio.
-                      </p>
-                    </div>
+                    <MercadoPagoTrustBadge />
+                    <p className="text-xs text-sky-700 -mt-2">
+                      Al completar el pedido, te redirigimos a Mercado Pago y luego volvés a PawGo.
+                    </p>
 
-                    <InstallmentsMessage totalAmount={orderData.total} className="mt-2" />
+                    {paymentType === "card" ? (
+                      <InstallmentsMessage totalAmount={orderData.total} className="mt-2" />
+                    ) : (
+                      <div className="mt-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2">
+                        <p className="text-sm text-teal-700">
+                          Estás pagando precio contado / transferencia.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -706,6 +736,7 @@ export default function CheckoutPage() {
               discount={orderData.discount}
               shippingCost={orderData.shippingCost}
               total={orderData.total}
+              paymentType={paymentType}
             />
           </div>
         </div>
@@ -724,18 +755,24 @@ export default function CheckoutPage() {
                   minimumFractionDigits: 0,
                 }).format(orderData.total)}
               </span>
-              <InstallmentsMessage
-                totalAmount={orderData.total}
-                variant="inline"
-                className="mt-1"
-              />
+              <span className="text-[11px] font-medium text-text-dark-gray mt-0.5">
+                {paymentType === "card" ? "Tarjeta (3 cuotas)" : "Contado / transferencia"}
+              </span>
+              {paymentType === "card" ? (
+                <InstallmentsMessage
+                  totalAmount={orderData.total}
+                  variant="inline"
+                  className="mt-1"
+                />
+              ) : ""}
+              <MercadoPagoTrustBadge variant="inline" className="mt-1" />
             </div>
             <button
               onClick={handleNext}
               disabled={!canProceedToStep2}
               className="btn-primary flex-1 py-3 px-6 h-auto text-base font-bold shadow-lg shadow-primary-turquoise/20 disabled:grayscale disabled:opacity-50"
             >
-              Continuar
+              {canProceedToStep2 ? "Continuar" : "Elegí un producto"}
             </button>
           </div>
         </div>

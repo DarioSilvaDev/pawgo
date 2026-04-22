@@ -31,6 +31,7 @@ export function ProductVariants({ productId }: ProductVariantsProps) {
     name: "",
     size: "",
     price: "",
+    cashPrice: "",
     stock: "",
     sku: "",
     isActive: true,
@@ -64,6 +65,7 @@ export function ProductVariants({ productId }: ProductVariantsProps) {
         name: formData.name,
         size: formData.size || undefined,
         price: formData.price ? parseFloat(formData.price) : undefined,
+        cashPrice: formData.cashPrice ? parseFloat(formData.cashPrice) : undefined,
         stock: formData.stock ? parseInt(formData.stock) : undefined,
         sku: formData.sku || undefined,
         isActive: formData.isActive,
@@ -94,6 +96,7 @@ export function ProductVariants({ productId }: ProductVariantsProps) {
       name: variant.name,
       size: variant.size || "",
       price: variant.price?.toString() || "",
+      cashPrice: variant.cashPrice?.toString() || "",
       stock: variant.stock?.toString() || "",
       sku: variant.sku || "",
       isActive: variant.isActive,
@@ -128,6 +131,7 @@ export function ProductVariants({ productId }: ProductVariantsProps) {
       name: "",
       size: "",
       price: "",
+      cashPrice: "",
       stock: "",
       sku: "",
       isActive: true,
@@ -222,6 +226,22 @@ export function ProductVariants({ productId }: ProductVariantsProps) {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Precio contado (opcional)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.cashPrice}
+                  onChange={(e) =>
+                    setFormData({ ...formData, cashPrice: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-turquoise focus:border-transparent"
+                  placeholder="Dejar vacío para usar precio contado del producto"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Stock (opcional)
                 </label>
                 <input
@@ -305,6 +325,9 @@ export function ProductVariants({ productId }: ProductVariantsProps) {
                     Precio
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Precio contado
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Stock
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -331,6 +354,11 @@ export function ProductVariants({ productId }: ProductVariantsProps) {
                       {variant.price != null
                         ? `ARS ${Number(variant.price).toLocaleString("es-AR")}`
                         : <span className="text-gray-400 italic">Usa precio base</span>}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {variant.cashPrice != null
+                        ? `ARS ${Number(variant.cashPrice).toLocaleString("es-AR")}`
+                        : <span className="text-gray-400 italic">Usa precio contado</span>}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {variant.stock !== null && variant.stock !== undefined

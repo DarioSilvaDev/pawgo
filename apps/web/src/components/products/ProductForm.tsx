@@ -30,6 +30,7 @@ export function ProductForm({ productId }: ProductFormProps) {
     description: "",
     basePrice: "",
     launchPrice: "", // Precio de lanzamiento (opcional)
+    cashPrice: "",
     currency: "ARS",
     images: [] as string[],
     isActive: true,
@@ -48,6 +49,7 @@ export function ProductForm({ productId }: ProductFormProps) {
         description: product.description,
         basePrice: product.basePrice.toString(),
         launchPrice: product.launchPrice?.toString() || "",
+        cashPrice: product.cashPrice.toString(),
         currency: product.currency,
         images: product.images || [],
         isActive: product.isActive,
@@ -77,6 +79,7 @@ export function ProductForm({ productId }: ProductFormProps) {
     try {
       // Validar que launchPrice <= basePrice si existe
       const basePriceNum = parseFloat(formData.basePrice);
+      const cashPriceNum = parseFloat(formData.cashPrice);
 
       // Manejar launchPrice: si está vacío o es NaN, usar null; si tiene valor, parsear
       let launchPriceNum: number | null = null;
@@ -98,11 +101,33 @@ export function ProductForm({ productId }: ProductFormProps) {
         return;
       }
 
+      const cardReference = launchPriceNum ?? basePriceNum;
+      if (isNaN(cashPriceNum) || cashPriceNum <= 0) {
+        showToast({
+          type: "error",
+          message: "El precio contado debe ser mayor a 0",
+          durationMs: 5000,
+        });
+        setSaving(false);
+        return;
+      }
+
+      if (cashPriceNum > cardReference) {
+        showToast({
+          type: "error",
+          message: "El precio contado debe ser menor o igual al precio tarjeta",
+          durationMs: 5000,
+        });
+        setSaving(false);
+        return;
+      }
+
       const data = {
         name: formData.name,
         description: formData.description,
         basePrice: basePriceNum,
         launchPrice: launchPriceNum, // null si está vacío (para remover), número si tiene valor
+        cashPrice: cashPriceNum,
         currency: formData.currency,
         images: formData.images,
         isActive: formData.isActive,
@@ -273,7 +298,7 @@ export function ProductForm({ productId }: ProductFormProps) {
           </div>
 
           {/* Precios y Moneda */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Precio Base *
@@ -293,7 +318,7 @@ export function ProductForm({ productId }: ProductFormProps) {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Precio Lanzamiento
+                Precio Tarjeta
                 <span className="text-xs text-gray-400 ml-1">(opcional)</span>
               </label>
               <input
@@ -308,7 +333,27 @@ export function ProductForm({ productId }: ProductFormProps) {
                 placeholder="0.00"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Si se define, se mostrará como precio promocional
+                Si se define, reemplaza al precio base para pagos con tarjeta
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Precio Contado *
+              </label>
+              <input
+                type="number"
+                required
+                min="0"
+                step="0.01"
+                value={formData.cashPrice}
+                onChange={(e) =>
+                  setFormData({ ...formData, cashPrice: e.target.value })
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-turquoise focus:border-transparent"
+                placeholder="0.00"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Se usa para contado / transferencia
               </p>
             </div>
             <div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { formatPrice } from "@/lib/pricing";
+import Image from "next/image";
 
 interface InstallmentsMessageProps {
   totalAmount?: number;
@@ -23,7 +24,7 @@ export function InstallmentsMessage({
       : null;
 
   const installmentCopy = installmentAmount
-    ? `o ${MAX_INSTALLMENTS} cuotas de ${formatPrice(installmentAmount, currency)} sin interés`
+    ? `${MAX_INSTALLMENTS} cuotas de ${formatPrice(installmentAmount, currency)} sin interés`
     : null;
 
   if (variant === "inline") {
@@ -53,17 +54,24 @@ export function InstallmentsMessage({
     );
   }
 
-  // return (
-  //   <div className={`rounded-lg border border-emerald-200 bg-emerald-50 p-3 ${className}`}>
-  //     <p className="text-sm font-bold uppercase tracking-wide text-emerald-800">
-  //       Hasta 3 cuotas sin interés
-  //     </p>
-  //     {installmentCopy && (
-  //       <p className="text-sm font-semibold text-emerald-700 mt-1">{installmentCopy}</p>
-  //     )}
-  //     <p className="text-xs text-emerald-700/90 mt-1">
-  //       Con Mercado Pago.
-  //     </p>
-  //   </div>
-  // );
+  return (
+    <div className={`rounded-lg border border-emerald-200 bg-emerald-50 p-3 ${className}`}>
+      <p className="text-sm font-bold uppercase tracking-wide text-emerald-800">
+        Hasta 3 cuotas sin interés
+      </p>
+      {installmentCopy && (
+        <p className="text-sm font-semibold text-emerald-700 mt-1">{installmentCopy}</p>
+      )}
+      <div className="mt-1 flex items-center gap-2">
+        <Image
+          src="/images/mercadopago-logo.svg"
+          alt="Mercado Pago"
+          width={74}
+          height={24}
+          className="h-4 w-auto"
+        />
+        <p className="text-xs text-emerald-700/90">Con Mercado Pago.</p>
+      </div>
+    </div>
+  );
 }

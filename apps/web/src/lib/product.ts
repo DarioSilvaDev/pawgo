@@ -7,6 +7,7 @@ export interface Product {
   description: string;
   basePrice: number;
   launchPrice?: number | null; // Precio de lanzamiento (opcional)
+  cashPrice: number; // Precio contado / transferencia
   currency: string;
   images: string[];
   isActive: boolean;
@@ -21,6 +22,7 @@ export interface ProductVariant {
   name: string;
   size?: string;
   price?: number; // Precio especial (ej: lanzamiento). Si no existe, usa basePrice del producto
+  cashPrice?: number; // Precio contado para esta variante
   stock?: number;
   sku?: string;
   isActive: boolean;
@@ -33,6 +35,7 @@ export interface CreateProductDto {
   description: string;
   basePrice: number;
   launchPrice?: number; // Precio de lanzamiento (opcional)
+  cashPrice: number;
   currency?: string;
   images?: string[];
   isActive?: boolean;
@@ -43,6 +46,7 @@ export interface CreateProductVariantDto {
   name: string;
   size?: string;
   price?: number; // Opcional: si no se especifica, usa basePrice del producto
+  cashPrice?: number;
   stock?: number;
   sku?: string;
   isActive?: boolean;
@@ -53,6 +57,7 @@ export interface UpdateProductDto {
   description?: string;
   basePrice?: number;
   launchPrice?: number | null; // null para remover el precio de lanzamiento
+  cashPrice?: number;
   currency?: string;
   images?: string[];
   isActive?: boolean;
@@ -62,6 +67,7 @@ export interface UpdateProductVariantDto {
   name?: string;
   size?: string;
   price?: number;
+  cashPrice?: number;
   stock?: number;
   sku?: string;
   isActive?: boolean;

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Product, ProductVariant } from "@/lib/product";
-import { getPriceDisplay, formatPrice } from "@/lib/pricing";
-import { InstallmentsMessage } from "@/components/checkout/InstallmentsMessage";
+import { Product } from "@/lib/product";
+import { getPriceDisplay, formatPrice, PaymentType } from "@/lib/pricing";
+import { MercadoPagoTrustBadge } from "@/components/checkout/MercadoPagoTrustBadge";
 
 // Estructura: Map<productId, Map<variantId, quantity>>
 type SelectedProducts = Map<string, Map<string, number>>;
@@ -15,6 +15,8 @@ type DescriptionBlock =
 
 interface ProductSelectionProps {
   products: Product[];
+  paymentType: PaymentType;
+  onPaymentTypeChange: (paymentType: PaymentType) => void;
   selectedProducts: SelectedProducts;
   onSelectProduct: (
     productId: string,
@@ -26,6 +28,8 @@ interface ProductSelectionProps {
 
 export function ProductSelection({
   products,
+  paymentType,
+  onPaymentTypeChange,
   selectedProducts,
   onSelectProduct,
   onBackInStockRequest,
@@ -180,28 +184,36 @@ export function ProductSelection({
 
         // Get primary display price (using first active variant if none selected)
         const firstVariant = activeVariants[0];
-        const priceInfo = getPriceDisplay(product, firstVariant);
+        const priceInfo = getPriceDisplay(product, firstVariant, paymentType);
+        const launchPrice = priceInfo.cardPrice;
+        const discountPercentage =
+          launchPrice < priceInfo.officialPrice
+            ? Math.round((1 - launchPrice / priceInfo.officialPrice) * 100)
+            : 0;
+        const hasLaunchPrice = launchPrice < priceInfo.officialPrice;
+        const cashBenefitAmount =
+          priceInfo.cashPrice < launchPrice ? launchPrice - priceInfo.cashPrice : 0;
 
         return (
-            <div
-              key={product.id}
-              className="flex flex-col gap-4"
-            >
-              {/* Main Product Card */}
-              <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-200">
-                <div className="flex gap-3 md:gap-4">
-                  {/* Product Image - Smaller on mobile */}
-                  <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0">
-                    <div className="relative w-full h-full rounded-lg overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200">
-                      {product.images && product.images.length > 0 ? (
-                        <Image
-                          src="/images/ejemplo-removebg-preview.png"
-                          alt={product.name}
-                          fill
-                          className="object-contain p-1"
-                          sizes="(max-width: 768px) 96px, 128px"
-                        />
-                      ) : (
+          <div
+            key={product.id}
+            className="flex flex-col gap-4"
+          >
+            {/* Main Product Card */}
+            <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-200">
+              <div className="flex gap-3 md:gap-4">
+                {/* Product Image - Smaller on mobile */}
+                <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0">
+                  <div className="relative w-full h-full rounded-lg overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200">
+                    {product.images && product.images.length > 0 ? (
+                      <Image
+                        src="/images/ejemplo-removebg-preview.png"
+                        alt={product.name}
+                        fill
+                        className="object-contain p-1"
+                        sizes="(max-width: 768px) 96px, 128px"
+                      />
+                    ) : (
                       <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
                         Sin imagen
                       </div>
@@ -215,36 +227,75 @@ export function ProductSelection({
                     {product.name}
                   </h3>
 
-                  {/* Price Section */}
-                  <div className="mt-2 mb-3">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="text-3xl leading-none font-black tracking-tight text-text-black">
-                        {formatPrice(priceInfo.effectivePrice, product.currency)}
+                  <div className="mt-1.5 mb-2">
+                    <p className="text-5xl md:text-[3.25rem] leading-none font-black tracking-tight text-text-black">
+                      {formatPrice(launchPrice, product.currency)}
+                    </p>
+                    <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                      <span className="text-2xl leading-none text-gray-400 line-through">
+                        {formatPrice(priceInfo.officialPrice, product.currency)}
                       </span>
-                      {priceInfo.originalPrice != null && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-base text-gray-400 line-through">
-                            {formatPrice(priceInfo.originalPrice, product.currency)}
-                          </span>
-                          <span className="text-base font-bold text-emerald-600">
-                            {Math.round((1 - priceInfo.effectivePrice / priceInfo.originalPrice) * 100)}% OFF
-                          </span>
-                        </div>
+                      {discountPercentage > 0 && (
+                        <span className="text-[1.7rem] leading-none font-extrabold text-emerald-600">
+                          {discountPercentage}% OFF
+                        </span>
                       )}
                     </div>
-                    {priceInfo.showLaunchBadge && (
-                      <span className="inline-flex mt-1 text-[10px] uppercase font-bold tracking-wide text-amber-700 bg-amber-100 px-2 py-1 rounded-full w-fit">
+                    {hasLaunchPrice && (
+                      <span className="mt-2 inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-amber-700">
                         🚀 Lanzamiento
                       </span>
                     )}
                   </div>
 
-                  <InstallmentsMessage
-                    totalAmount={priceInfo.effectivePrice}
-                    currency={product.currency}
-                    variant="compact"
-                    className="mb-3"
-                  />
+                  {/* Price Section */}
+                  <div className="mt-2 mb-3 rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-3">
+                    <div className="space-y-2" role="radiogroup" aria-label="Método de pago">
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={paymentType === "card"}
+                        onClick={() => onPaymentTypeChange("card")}
+                        className={`w-full rounded-lg border px-3 py-2.5 text-left transition-colors min-h-[56px] ${paymentType === "card"
+                          ? "border-emerald-300 bg-emerald-100"
+                          : "border-gray-200 bg-white hover:bg-gray-100"
+                          }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="text-sm font-semibold text-text-black leading-tight">Tarjeta (3 cuotas)</span>
+                          <span className="text-lg font-bold text-emerald-700 leading-none">
+                            {formatPrice(priceInfo.cardPrice, product.currency)}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-text-dark-gray">Hasta 3 cuotas sin interés.</p>
+                      </button>
+
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={paymentType === "cash"}
+                        onClick={() => onPaymentTypeChange("cash")}
+                        className={`w-full rounded-lg border px-3 py-2.5 text-left transition-colors min-h-[56px] ${paymentType === "cash"
+                          ? "border-teal-300 bg-teal-100"
+                          : "border-gray-200 bg-white hover:bg-gray-100"
+                          }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="text-sm font-semibold text-text-black leading-tight">Contado / transferencia</span>
+                          <span className="text-lg font-bold text-teal-700 leading-none">
+                            {formatPrice(priceInfo.cashPrice, product.currency)}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-text-dark-gray">
+                          {cashBenefitAmount > 0
+                            ? `Beneficio sobre lanzamiento: ${formatPrice(cashBenefitAmount, product.currency)} menos.`
+                            : "Precio especial por unidad."}
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
+                  <MercadoPagoTrustBadge variant="feature" className="mb-3 mt-1" />
 
                   <div className="relative">
                     {renderDescription(

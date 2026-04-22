@@ -221,25 +221,15 @@ export function ProductsList() {
                 </p>
                 <div className="flex justify-between items-center mb-3">
                   <div className="flex flex-col">
-                    {product.launchPrice != null && product.launchPrice > 0 ? (
-                      <>
-                        <span className="text-sm text-gray-400 line-through">
-                          {formatPrice(product.basePrice, product.currency)}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-bold text-primary-turquoise">
-                            {formatPrice(product.launchPrice, product.currency)}
-                          </span>
-                          <span className="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
-                            🚀 Lanzamiento
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <span className="text-lg font-bold text-primary-turquoise">
-                        {formatPrice(product.basePrice, product.currency)}
-                      </span>
-                    )}
+                    <span className="text-xs text-gray-400 line-through">
+                      Oficial: {formatPrice(product.basePrice, product.currency)}
+                    </span>
+                    <span className="text-sm font-semibold text-emerald-700">
+                      Tarjeta: {formatPrice(product.launchPrice ?? product.basePrice, product.currency)}
+                    </span>
+                    <span className="text-sm font-semibold text-teal-700">
+                      Contado: {formatPrice(product.cashPrice, product.currency)}
+                    </span>
                   </div>
                   {product.variants && product.variants.length > 0 && (
                     <span className="text-xs text-gray-500">

@@ -14,10 +14,13 @@ export interface CustomerInfo {
   email: string;
 }
 
+export type PaymentType = "card" | "cash";
+
 export interface CreateOrderDto {
   leadId?: string;
   customerInfo?: CustomerInfo;
   items: OrderItem[];
+  paymentType?: PaymentType;
   fulfillmentType?: "home_delivery" | "pickup_point";
   pickupPointId?: string;
   partnerReferralSlug?: string;
@@ -41,6 +44,7 @@ export interface Payment {
   amount: number;
   currency: string;
   paymentMethod?: string;
+  paymentType?: PaymentType;
   paymentLink?: string;
   mercadoPagoPreferenceId?: string;
   mercadoPagoPaymentId?: string;
@@ -62,6 +66,7 @@ export interface Order {
   leadId?: string;
   discountCodeId?: string;
   fulfillmentType?: "home_delivery" | "pickup_point";
+  paymentType?: PaymentType;
   pickupPointId?: string;
   status: string;
   subtotal: number;

@@ -1,7 +1,7 @@
 "use client";
 
 import { Product, ProductVariant } from "@/lib/product";
-import { getPriceDisplay, formatPrice } from "@/lib/pricing";
+import { getPriceDisplay, formatPrice, PaymentType } from "@/lib/pricing";
 import { InstallmentsMessage } from "@/components/checkout/InstallmentsMessage";
 
 interface OrderItem {
@@ -16,6 +16,7 @@ interface OrderSummaryProps {
   discount: number;
   shippingCost: number;
   total: number;
+  paymentType: PaymentType;
   currency?: string;
 }
 
@@ -25,6 +26,7 @@ export function OrderSummary({
   discount,
   shippingCost,
   total,
+  paymentType,
   currency = "ARS",
 }: OrderSummaryProps) {
   const hasSelectedItems = items.length > 0;
@@ -41,9 +43,9 @@ export function OrderSummary({
           <p className="text-text-dark-gray text-sm">No hay productos seleccionados</p>
         ) : (
           items.map((item, index) => {
-            const priceInfo = getPriceDisplay(item.product, item.variant);
-            const itemTotal = priceInfo.effectivePrice * item.quantity;
-            
+            const priceInfo = getPriceDisplay(item.product, item.variant, paymentType);
+            const itemTotal = priceInfo.selectedPrice * item.quantity;
+
             return (
               <div key={index} className="flex items-start gap-3 pb-3 border-b border-gray-100 last:border-0">
                 <div className="flex-1">
@@ -57,25 +59,12 @@ export function OrderSummary({
                   </p>
                 </div>
                 <div className="text-right">
-                  {priceInfo.originalPrice != null ? (
-                    <div>
-                      <p className="text-xs text-gray-400 line-through">
-                        {formatPrice(priceInfo.originalPrice * item.quantity, currency)}
-                      </p>
-                      <p className="font-semibold text-primary-turquoise text-sm">
-                        {formatPrice(itemTotal, currency)}
-                      </p>
-                      {priceInfo.showLaunchBadge && (
-                        <span className="text-[10px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded">
-                          🚀 Lanzamiento
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="font-semibold text-text-black text-sm">
-                      {formatPrice(itemTotal, currency)}
-                    </p>
-                  )}
+                  <p className="text-[11px] text-gray-400 line-through">
+                    {formatPrice(priceInfo.officialPrice * item.quantity, currency)}
+                  </p>
+                  <p className="font-semibold text-text-black text-sm">
+                    {formatPrice(itemTotal, currency)}
+                  </p>
                 </div>
               </div>
             );
@@ -121,12 +110,24 @@ export function OrderSummary({
           </span>
         </div>
 
-        <InstallmentsMessage
-          totalAmount={total}
-          currency={currency}
-          variant={hasSelectedItems ? "inline" : "card"}
-          className="mt-3"
-        />
+        <p className="text-xs text-text-dark-gray">
+          Método seleccionado: {paymentType === "card" ? "Tarjeta" : "Contado / transferencia"}
+        </p>
+
+        {paymentType === "card" ? (
+          <InstallmentsMessage
+            totalAmount={total}
+            currency={currency}
+            variant={hasSelectedItems ? "inline" : "card"}
+            className="mt-3"
+          />
+        ) : (
+          <div className="mt-3 rounded-lg border border-teal-200 bg-teal-50 p-3">
+            <p className="text-xs font-medium text-teal-800">
+              Pagando en contado / transferencia.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

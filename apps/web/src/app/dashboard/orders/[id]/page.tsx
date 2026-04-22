@@ -541,6 +541,11 @@ export default function OrderDetailsPage() {
                             <p className="font-medium text-gray-900">
                               {payment.paymentMethod || "MercadoPago"}
                             </p>
+                            {payment.paymentType && (
+                              <p className="text-xs text-gray-500 capitalize">
+                                Tipo comercial: {payment.paymentType === "card" ? "tarjeta" : "contado"}
+                              </p>
+                            )}
                             <p className="text-sm text-gray-500">
                               ID: {payment.id.slice(0, 8)}...
                             </p>
