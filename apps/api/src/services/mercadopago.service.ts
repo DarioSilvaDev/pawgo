@@ -64,8 +64,8 @@ export class MercadoPagoService {
     }
 
     return {
-      installments: 3,
-      default_installments: 3,
+      installments: 6,
+      default_installments: 6,
       excluded_payment_types: [
         { id: "ticket" },
         { id: "atm" },
