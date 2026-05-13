@@ -10,7 +10,7 @@ interface InstallmentsMessageProps {
   variant?: "card" | "inline" | "compact";
 }
 
-const MAX_INSTALLMENTS = 3;
+const MAX_INSTALLMENTS = 6;
 
 export function InstallmentsMessage({
   totalAmount,
@@ -57,7 +57,7 @@ export function InstallmentsMessage({
   return (
     <div className={`rounded-lg border border-emerald-200 bg-emerald-50 p-3 ${className}`}>
       <p className="text-sm font-bold uppercase tracking-wide text-emerald-800">
-        Hasta 3 cuotas sin interés
+        Hasta {MAX_INSTALLMENTS} cuotas sin interés
       </p>
       {installmentCopy && (
         <p className="text-sm font-semibold text-emerald-700 mt-1">{installmentCopy}</p>

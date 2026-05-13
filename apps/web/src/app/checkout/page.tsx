@@ -621,7 +621,7 @@ export default function CheckoutPage() {
                     <div className="bg-gray-50 rounded-lg p-4">
                       <p className="text-sm text-text-dark-gray">
                         <span className="font-medium text-text-black">Método de pago seleccionado:</span>{" "}
-                        {paymentType === "card" ? "Tarjeta (3 cuotas)" : "Contado / transferencia"}
+                        {paymentType === "card" ? "Tarjeta (6 cuotas)" : "Contado / transferencia"}
                       </p>
                     </div>
 
@@ -756,7 +756,7 @@ export default function CheckoutPage() {
                 }).format(orderData.total)}
               </span>
               <span className="text-[11px] font-medium text-text-dark-gray mt-0.5">
-                {paymentType === "card" ? "Tarjeta (3 cuotas)" : "Contado / transferencia"}
+                {paymentType === "card" ? "Tarjeta (6 cuotas)" : "Contado / transferencia"}
               </span>
               {paymentType === "card" ? (
                 <InstallmentsMessage

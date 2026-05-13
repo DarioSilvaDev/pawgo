@@ -262,12 +262,12 @@ export function ProductSelection({
                           }`}
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <span className="text-sm font-semibold text-text-black leading-tight">Tarjeta (3 cuotas)</span>
+                          <span className="text-sm font-semibold text-text-black leading-tight">Tarjeta (6 cuotas)</span>
                           <span className="text-lg font-bold text-emerald-700 leading-none">
                             {formatPrice(priceInfo.cardPrice, product.currency)}
                           </span>
                         </div>
-                        <p className="mt-1 text-xs text-text-dark-gray">Hasta 3 cuotas sin interés.</p>
+                        <p className="mt-1 text-xs text-text-dark-gray">Hasta 6 cuotas sin interés.</p>
                       </button>
 
                       <button
